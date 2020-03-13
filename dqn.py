@@ -14,14 +14,16 @@ class Brain(nn.Module):
         super(Brain, self).__init__()
         self.in_size = in_
         self.out_size = out_size
-        self.conv1 = nn.Conv2d(in_, 32, kernel_size=(11,7), padding=1)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=(11,5))
-        self.fc = nn.Linear(256, 128)
-        self.out = nn.Linear(128, out_size)
+        self.conv1 = nn.Conv2d(in_, 32, kernel_size=(4,4), stride=2)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=(7,3))
+        self.conv3 = nn.Conv2d(64, 256, kernel_size=(3,2))
+        self.fc = nn.Linear(256, 64)
+        self.out = nn.Linear(64, out_size)
         
     def forward(self, state):
         x = torch.relu(self.conv1(state))
         x = torch.relu(self.conv2(x))
+        x = torch.relu(self.conv3(x))
         x = x.view(state.size(0), 1, -1)
         x = torch.relu(self.fc(x))
         return self.out(x)
@@ -30,7 +32,7 @@ class Brain(nn.Module):
 class Agent():
     
     def __init__(self, local_Q, target_Q, num_actions, eps_start=1.0, eps_end=0.1,
-                 eps_decay=0.996, gamma=0.99, alpha=5e-4, batch_size=128, memory_capacity=2e5, tau=1e-3):
+                 eps_decay=0.996, gamma=0.99, alpha=5e-4, batch_size=256, memory_capacity=5e3, tau=1e-3):
         self.local_Q = local_Q.to(device)
         self.target_Q = target_Q.to(device)
         self.target_Q.load_state_dict(self.local_Q.state_dict())
@@ -66,8 +68,7 @@ class Agent():
         if len(self.replay_memory.memory) < self.batch_size:
             return
 
-        state_batch, action_batch, reward_batch, next_state_batch, done_batch = \
-            self.replay_memory.sample(self.batch_size)
+        state_batch, action_batch, reward_batch, next_state_batch, done_batch = self.replay_memory.sample(self.batch_size)
 
         output = self.local_Q(state_batch).squeeze(1)
         target = output.clone()
@@ -97,10 +98,15 @@ class ReplayMemory:
     def push(self, *args):
         if len(self.memory) < self.capacity:
             self.memory.append(None)
-        elif self.memory[int(self.position)][2] > 0:
-            self.position = (self.position + 1) % self.capacity
-            print("skipped")
-
+        else:
+            while self.memory[int(self.position)][2] == 1:
+                self.position = (self.position + 1) % self.capacity
+                print("skipped")
+            
+            if args[2] == 0:
+                if np.random.random() < 0.5:
+                    return
+        
         self.memory[int(self.position)] = args[0]
         self.position = (self.position + 1) % self.capacity
 

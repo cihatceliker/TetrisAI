@@ -7,13 +7,15 @@ import torch
 
 num_actions = 5
 num_iter = 5000
+frame_stack = 8
 
-env = Environment()
+env = Environment(frame_stack=frame_stack)
 
-max_frame = 18
-
-agent = Agent(Brain(max_frame, num_actions), Brain(max_frame, num_actions), num_actions)
+agent = Agent(Brain(frame_stack, num_actions), Brain(frame_stack, num_actions), num_actions)
 start = 1
+
+#agent = pickle.load(open("560.tt", mode="rb"))
+#start = agent.episodes[-1]+1
 
 for episode in range(start, num_iter):
     done = False
@@ -24,7 +26,6 @@ for episode in range(start, num_iter):
         next_state, reward, done, info = env.step(action)
         agent.store_experience(state, action, reward, next_state, 1-done)
         state = next_state
-
         agent.learn()
         score += reward
     

@@ -41,9 +41,10 @@ for n in range(4):
 
 class Environment:
 
-    def __init__(self, row=20, col=10):
+    def __init__(self, frame_stack, row=20, col=10):
         self.row = row
         self.col = col
+        self.frame_stack = frame_stack
         self.actions = {
             0: lambda x: 0, # do nothing
             1: self._move,
@@ -55,27 +56,32 @@ class Environment:
     def reset(self):
         self.board = np.zeros((self.row, self.col))
         self.add_new_piece()
-        self.state_history = []
-        while self.is_available(self.current_piece, (1, 0)):
-            self._set(num=0)
-            self.rel_x += 1
-            self._set(num=1)
-            self.state_history.append(self.board)
-        return []# self.process_history()
 
-    def drop(self):
-        while self.is_available(self.current_piece, (1, 0)):
-            self._set(num=0)
-            self.rel_x += 1
-            self._set(num=1)
+        self.state_history = []
+        return self.prepare_state()
 
     def step(self, action):
         self.done = False
         self.reward = 0
         self.info = ""
-        #self.actions[action](True if action % 2 == 0 else False)
+        self.state_history.append(self.board)
+
+        self.actions[action](True if action % 2 == 0 else False)
         self.apply_gravity()
-        return [], self.reward, self.done, self.info
+
+        return self.prepare_state(), self.reward, self.done, self.info
+
+    def prepare_state(self):
+        if len(self.state_history) < self.frame_stack:
+            state = np.zeros((self.frame_stack, self.row, self.col))
+            state[-1] = self.board
+            return state
+
+        state = self.state_history[-self.frame_stack:]
+
+        self.state_history = self.state_history[-self.frame_stack+1:]
+        
+        return np.array(state)
 
     def add_new_piece(self, drop_point=(1,5)):
         self.rel_x, self.rel_y = drop_point
@@ -129,7 +135,7 @@ class Environment:
                     for j in range(i-1,i-5,-1):
                         if np.min(self.board[j,:]) == 1:
                             row_count += 1
-                    self.reward = (row_count + 1)
+                    self.reward = (row_count + 1)**2
                     if row_count == 3:
                         self.info = "TETRIS"
                     for j in range(i,1+row_count,-1):
@@ -142,13 +148,3 @@ class Environment:
                 self.reward = -1
                 self.info = "done"
                 self.done = True
-
-    def process_history(self):
-        if len(self.state_history) < self.frame_stack:
-            processed_state = np.zeros((self.frame_stack, self.row, self.col))
-            for i in range(self.frame_stack):
-                processed_state[i] = self.board
-            return processed_state
-
-        processed_state = self.state_history[-self.frame_stack:]
-        return processed_state
