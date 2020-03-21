@@ -11,11 +11,10 @@ PIECE_COLOR = "#fff"
 
 class GameGrid():
 
-    def __init__(self, speed=0.1, size=720):
+    def __init__(self, speed=0.3, size=720):
         width = size / 2
         height = size
         self.root = Tk()
-        self.key = "' '"
         self.root.configure(background=BACKGROUND_COLOR)
         self.game = Canvas(self.root, width=width, height=height, bg=BACKGROUND_COLOR)
         self.game.pack()
@@ -48,7 +47,7 @@ class GameGrid():
         action = 0
         while not self.quit:
             #action = self.agent.select_action(state)
-            action = np.random.randint(5)
+            #action = np.random.randint(5)
             next_state, reward, done, info = self.env.step(action)
             score += reward
             if done:
@@ -63,7 +62,7 @@ class GameGrid():
                 rect = self.game_area[i][j]
                 curr = int(self.env.board[i, j])
                 color = BACKGROUND_COLOR if curr == 0 else PIECE_COLOR
-                if i == self.env.rel_x and j == self.env.rel_y: color = "blue"
+                if i == self.env.rel_x and j == self.env.rel_y: color = "#999"
                 self.game.itemconfig(rect, fill=color)
 
     def init(self):

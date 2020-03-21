@@ -31,6 +31,9 @@ ALL_SHAPES = {
     3: []
 }
 
+REWARD_FUNC = lambda x: x ** 2
+DEATH_REWARD = -16
+
 def rotate_n_times(shape, n):
     new_shape = []
     for coor in shape:
@@ -46,6 +49,7 @@ for n in range(4):
         ALL_SHAPES[n].append(rotate_n_times(shape, n%2))
     for shape in SHAPES[4]:
         ALL_SHAPES[n].append(rotate_n_times(shape, n))
+
 
 
 class Environment:
@@ -66,20 +70,14 @@ class Environment:
         self.board = np.zeros((self.row, self.col))
         self.add_new_piece()
         self.is_action = False
+        self.done = False
         return self.board
 
-    def apply_action(self, action):
-        self.is_action = True
-        if action <= 4:
-            self.actions[action](True if action % 2 == 0 else False)
-        else: self.actions[action]()
-        self.is_action = False
-
     def step(self, action):
-        self.done = False
         self.reward = 0
         self.info = ""
         self.apply_action(action)
+        #if not self.is_action:
         self.apply_gravity()
         return self.board, self.reward, self.done, self.info
 
@@ -87,47 +85,26 @@ class Environment:
         self.rel_x, self.rel_y = drop_point
         self.rot_index = 0
         self.cur_index = np.random.randint(0,7)
-
         self.current_piece = ALL_SHAPES[self.rot_index][self.cur_index]
+        
+        if not self.is_available(self.current_piece, (0, 0)):
+            self.done = True
+            self.reward = DEATH_REWARD
+            self.reset()
+            print("reset")
+        
         self._set(num=1)
 
-    def is_available(self, shape, position):
-        x, y = position
+    def is_available(self, shape, to):
+        x, y = to
         k, l = self.rel_x, self.rel_y
         for i, j in shape:
-            if i+x+k < 0 or i+x+k >= self.row or j+y+l < 0 or j+y+l >= self.col:
+            if i+x+k >= self.row or j+y+l < 0 or j+y+l >= self.col:
                 return False
+            print((i+x, j+y) in shape)
             if (i+x, j+y) not in shape and self.board[i+x+k, j+y+l] == 1:
                 return False
         return True
-
-    def apply_gravity(self):
-        if self.is_available(self.current_piece, (1, 0)):
-            self._set(num=0)
-            self.rel_x += 1
-            self._set(num=1)
-        elif not 1 in self.board[1]:
-            self.check_rows()
-            self.add_new_piece()
-        else:
-            self.reset()
-
-    def check_rows(self):
-        i = self.row - 1
-        while i > 0:
-            if np.min(self.board[i,:]) == 1:
-                row_count = 0
-                for j in range(i-1,i-5,-1):
-                    if not 0 in self.board[j,:]:
-                        row_count += 1
-                        print(row_count)
-                self.reward = (row_count+1)**2
-                if row_count == 3:
-                    self.info = "TETRIS"
-                for j in range(i,1+row_count,-1):
-                    self.board[j,:] = self.board[j-1-row_count,:]
-                i += 1
-            i -= 1
 
     def _move(self, right=False):
         to = 1 if right else -1
@@ -143,16 +120,43 @@ class Environment:
         if self.is_available(rotated_piece, (0,0)):
             self._set(num=0)
             self.current_piece = rotated_piece
-            self._set(num=1)
             self.rot_index = new_rot_idx
+            self._set(num=1)
 
-    def _drop(self):
+    def _drop(self, _):
         while self.is_available(self.current_piece, (1, 0)):
             self._set(num=0)
             self.rel_x += 1
             self._set(num=1)
 
     def _set(self, num):
-        i, j = self.rel_x, self.rel_y
-        for x, y in self.current_piece:
+        x, y = self.rel_x, self.rel_y
+        for i, j in self.current_piece:
             self.board[i+x,j+y] = num
+
+    def apply_gravity(self):
+        if self.is_available(self.current_piece, (1, 0)):
+            self._set(num=0)
+            self.rel_x += 1
+            self._set(num=1)
+        else:
+            self.check_rows()
+            self.add_new_piece()
+        
+    def apply_action(self, action):
+        self.is_action = True
+        self.actions[action](True if action % 2 == 0 else False)
+        self.is_action = False
+
+    def check_rows(self):
+        row_count = 0
+        i = self.row - 1
+        while i > 0:
+            if not 0 in self.board[i,:]:
+                for j in range(i, 0, -1):
+                    self.board[j,:] = self.board[j-1,:]
+                i += 1
+                row_count += 1
+            i -= 1
+        self.reward = REWARD_FUNC(row_count)
+        if self.reward != 0: print(self.reward)
