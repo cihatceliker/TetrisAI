@@ -39,8 +39,7 @@ class GameGrid():
         self.root.bind("<Key>", self.key_down)
         threading.Thread(target=self.run_game).start()
         self.root.mainloop()
-
-
+        
     def run_game(self):
         state = self.env.reset()
         score = 0

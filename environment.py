@@ -18,7 +18,6 @@ SHAPES = {
         [(0,-1),(-1,0),(0,0),(0,1)]     # T
     ]
 }
-
 ROT_L = [
     [0,1],
     [-1,0]
@@ -51,19 +50,18 @@ for n in range(4):
         ALL_SHAPES[n].append(rotate_n_times(shape, n))
 
 
-
 class Environment:
 
     def __init__(self, row=20, col=10):
         self.row = row
         self.col = col
         self.actions = {
-            0: lambda x: 0, # do nothing
-            1: self._move,
-            2: self._move,
-            3: self._rotate,
-            4: self._rotate,
-            5: self._drop
+            0: (lambda x: 0, None),
+            1: (self._move, (0,-1)),
+            2: (self._move, (0,1)),
+            3: (self._rotate, False), 
+            4: (self._rotate, True),
+            5: (self._drop, None)
         }
     
     def reset(self):
@@ -77,8 +75,8 @@ class Environment:
         self.reward = 0
         self.info = ""
         self.apply_action(action)
-        #if not self.is_action:
-        self.apply_gravity()
+        if not self.is_action:
+            self.apply_gravity()
         return self.board, self.reward, self.done, self.info
 
     def add_new_piece(self, drop_point=(1,5)):
@@ -101,20 +99,12 @@ class Environment:
         for i, j in shape:
             if i+x+k >= self.row or j+y+l < 0 or j+y+l >= self.col:
                 return False
-            print((i+x, j+y) in shape)
-            if (i+x, j+y) not in shape and self.board[i+x+k, j+y+l] == 1:
+            if not (i+x, j+y) in shape and self.board[i+x+k, j+y+l] == 1:
                 return False
         return True
 
-    def _move(self, right=False):
-        to = 1 if right else -1
-        if self.is_available(self.current_piece, (0,to)):
-            self._set(num=0)
-            self.rel_y += to
-            self._set(num=1)
-
-    def _rotate(self, reverse=False):
-        to = 1 if reverse else -1
+    def _rotate(self, clockwise):
+        to = 1 if clockwise else -1
         new_rot_idx = (self.rot_index + to) % 4
         rotated_piece = ALL_SHAPES[new_rot_idx][self.cur_index]
         if self.is_available(rotated_piece, (0,0)):
@@ -124,39 +114,46 @@ class Environment:
             self._set(num=1)
 
     def _drop(self, _):
-        while self.is_available(self.current_piece, (1, 0)):
-            self._set(num=0)
-            self.rel_x += 1
-            self._set(num=1)
+        while self._move((1,0)):
+            pass
 
     def _set(self, num):
         x, y = self.rel_x, self.rel_y
         for i, j in self.current_piece:
             self.board[i+x,j+y] = num
 
-    def apply_gravity(self):
-        if self.is_available(self.current_piece, (1, 0)):
+    def _move(self, to):
+        if self.is_available(self.current_piece, to):
             self._set(num=0)
-            self.rel_x += 1
+            self.rel_x += to[0]
+            self.rel_y += to[1]
             self._set(num=1)
-        else:
+            return True
+        return False
+
+    def apply_gravity(self):
+        if not self._move((1,0)):
             self.check_rows()
             self.add_new_piece()
         
     def apply_action(self, action):
         self.is_action = True
-        self.actions[action](True if action % 2 == 0 else False)
+        self.actions[action][0](self.actions[action][1])
         self.is_action = False
 
     def check_rows(self):
         row_count = 0
         i = self.row - 1
         while i > 0:
-            if not 0 in self.board[i,:]:
+            num = np.mean(self.board[i,:])
+            if num == 1:
                 for j in range(i, 0, -1):
                     self.board[j,:] = self.board[j-1,:]
                 i += 1
                 row_count += 1
+            elif num == 0:
+                break
             i -= 1
         self.reward = REWARD_FUNC(row_count)
         if self.reward != 0: print(self.reward)
+        if row_count == 4: print("tetris")
