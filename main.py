@@ -1,20 +1,20 @@
-from tetris import Environment
+from environment import Environment
 from dqn import Agent, Brain, ReplayMemory
 import numpy as np
 import math
 import pickle
 import torch
 
-num_actions = 5
+num_actions = 6
 num_iter = 5000
-frame_stack = 8
+frame_stack = 4
 
 env = Environment(frame_stack=frame_stack)
 
 agent = Agent(Brain(frame_stack, num_actions), Brain(frame_stack, num_actions), num_actions)
 start = 1
 
-#agent = pickle.load(open("560.tt", mode="rb"))
+#agent = pickle.load(open("1660.tt", mode="rb"))
 #start = agent.episodes[-1]+1
 
 for episode in range(start, num_iter):
@@ -42,4 +42,4 @@ for episode in range(start, num_iter):
             pickle.dump(agent, pickle_out)
             pickle_out.close()
             print("weights are safe for ", episode)
-    else: print("episode: ", episode,"score: %.6f" % score)
+    #else: print("episode: ", episode,"score: %.6f" % score)

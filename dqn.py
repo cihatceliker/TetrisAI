@@ -14,25 +14,29 @@ class Brain(nn.Module):
         super(Brain, self).__init__()
         self.in_size = in_
         self.out_size = out_size
-        self.conv1 = nn.Conv2d(in_, 32, kernel_size=(4,4), stride=2)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=(7,3))
-        self.conv3 = nn.Conv2d(64, 256, kernel_size=(3,2))
-        self.fc = nn.Linear(256, 64)
-        self.out = nn.Linear(64, out_size)
+        self.conv_row = nn.Conv2d(in_, 1, kernel_size=(1, 10))
+        self.conv_col = nn.Conv2d(in_, 1, kernel_size=(20, 1))
+        self.conv_row_dob = nn.Conv2d(in_, 2, kernel_size=(4, 10))
+        self.conv_col_dob = nn.Conv2d(in_, 2, kernel_size=(20, 2))
+        self.conv1 = nn.Conv2d(in_, 4, kernel_size=(5,5))
+        self.conv2 = nn.Conv2d(4, 8, kernel_size=(7,3))
+        self.fc = nn.Linear(402, out_size)
         
     def forward(self, state):
+        x_row = torch.relu(self.conv_row(state)).view(state.size(0), 1, -1)
+        x_col = torch.relu(self.conv_col(state)).view(state.size(0), 1, -1)
+        x_row2 = torch.relu(self.conv_row_dob(state)).view(state.size(0), 1, -1)
+        x_col2 = torch.relu(self.conv_col_dob(state)).view(state.size(0), 1, -1)
         x = torch.relu(self.conv1(state))
-        x = torch.relu(self.conv2(x))
-        x = torch.relu(self.conv3(x))
-        x = x.view(state.size(0), 1, -1)
-        x = torch.relu(self.fc(x))
-        return self.out(x)
+        x = torch.relu(self.conv2(x)).view(state.size(0), 1, -1)
+        x = torch.cat((x, x_row, x_col, x_row2, x_col2), dim=2)
+        return self.fc(x)
 
 
 class Agent():
     
-    def __init__(self, local_Q, target_Q, num_actions, eps_start=1.0, eps_end=0.1,
-                 eps_decay=0.996, gamma=0.99, alpha=5e-4, batch_size=256, memory_capacity=5e3, tau=1e-3):
+    def __init__(self, local_Q, target_Q, num_actions, eps_start=1.0, eps_end=0.01,
+                 eps_decay=0.995, gamma=0.999, alpha=5e-4, batch_size=256, memory_capacity=2e3, tau=1e-3):
         self.local_Q = local_Q.to(device)
         self.target_Q = target_Q.to(device)
         self.target_Q.load_state_dict(self.local_Q.state_dict())
@@ -102,11 +106,9 @@ class ReplayMemory:
             while self.memory[int(self.position)][2] == 1:
                 self.position = (self.position + 1) % self.capacity
                 print("skipped")
-            
-            if args[2] == 0:
+            if args[0][2] == 0:
                 if np.random.random() < 0.5:
                     return
-        
         self.memory[int(self.position)] = args[0]
         self.position = (self.position + 1) % self.capacity
 

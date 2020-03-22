@@ -2,6 +2,13 @@ import numpy as np
 import random
 import sys
 
+EMPTY = 0.0
+PIECE = 1.0
+
+REWARD_FUNC = lambda x: x ** 2
+DEATH_REWARD = -1
+DEFAULT_REWARD = -0.1
+
 # ARS rotation
 SHAPES = {
     0: [
@@ -30,9 +37,6 @@ ALL_SHAPES = {
     3: []
 }
 
-REWARD_FUNC = lambda x: x ** 2
-DEATH_REWARD = -16
-
 def rotate_n_times(shape, n):
     new_shape = []
     for coor in shape:
@@ -52,9 +56,10 @@ for n in range(4):
 
 class Environment:
 
-    def __init__(self, row=20, col=10):
+    def __init__(self, row=20, col=10, frame_stack=2):
         self.row = row
         self.col = col
+        self.frame_stack = frame_stack
         self.actions = {
             0: (lambda x: 0, None),
             1: (self._move, (0,-1)),
@@ -63,43 +68,48 @@ class Environment:
             4: (self._rotate, True),
             5: (self._drop, None)
         }
-    
+
     def reset(self):
-        self.board = np.zeros((self.row, self.col))
+        self.board = np.ones((self.row, self.col)) * EMPTY
+        self.state_history = [self.board] * self.frame_stack
         self.add_new_piece()
-        self.is_action = False
-        self.done = False
-        return self.board
+        self.done = one = False
+        return self.state_history[-self.frame_stack:]
 
     def step(self, action):
         self.reward = 0
         self.info = ""
-        self.apply_action(action)
-        if not self.is_action:
-            self.apply_gravity()
-        return self.board, self.reward, self.done, self.info
+
+        self.actions[action][0](self.actions[action][1])
+        if not self._move((1,0)):
+            self.check_rows()
+            self.add_new_piece()
+        self.state_history.append(self.board)
+
+        if self.reward == 0: self.reward = DEFAULT_REWARD
+
+        return self.state_history[-self.frame_stack:], self.reward, self.done, self.info
 
     def add_new_piece(self, drop_point=(1,5)):
         self.rel_x, self.rel_y = drop_point
         self.rot_index = 0
         self.cur_index = np.random.randint(0,7)
         self.current_piece = ALL_SHAPES[self.rot_index][self.cur_index]
-        
         if not self.is_available(self.current_piece, (0, 0)):
             self.done = True
             self.reward = DEATH_REWARD
-            self.reset()
-            print("reset")
-        
-        self._set(num=1)
+        else:
+            self._set(num=PIECE)
 
     def is_available(self, shape, to):
         x, y = to
         k, l = self.rel_x, self.rel_y
         for i, j in shape:
+            # out of bounds
             if i+x+k >= self.row or j+y+l < 0 or j+y+l >= self.col:
                 return False
-            if not (i+x, j+y) in shape and self.board[i+x+k, j+y+l] == 1:
+            # is the tile occupied by others
+            if self.board[i+x+k, j+y+l] == PIECE:
                 return False
         return True
 
@@ -107,15 +117,11 @@ class Environment:
         to = 1 if clockwise else -1
         new_rot_idx = (self.rot_index + to) % 4
         rotated_piece = ALL_SHAPES[new_rot_idx][self.cur_index]
+        self._set(num=EMPTY)
         if self.is_available(rotated_piece, (0,0)):
-            self._set(num=0)
             self.current_piece = rotated_piece
             self.rot_index = new_rot_idx
-            self._set(num=1)
-
-    def _drop(self, _):
-        while self._move((1,0)):
-            pass
+        self._set(num=PIECE)
 
     def _set(self, num):
         x, y = self.rel_x, self.rel_y
@@ -123,37 +129,31 @@ class Environment:
             self.board[i+x,j+y] = num
 
     def _move(self, to):
+        self._set(num=EMPTY)
         if self.is_available(self.current_piece, to):
-            self._set(num=0)
             self.rel_x += to[0]
             self.rel_y += to[1]
-            self._set(num=1)
+            self._set(num=PIECE)
             return True
+        self._set(num=PIECE)
         return False
 
-    def apply_gravity(self):
-        if not self._move((1,0)):
-            self.check_rows()
-            self.add_new_piece()
-        
-    def apply_action(self, action):
-        self.is_action = True
-        self.actions[action][0](self.actions[action][1])
-        self.is_action = False
+    def _drop(self, _):
+        while self._move((1,0)):
+            pass
 
     def check_rows(self):
         row_count = 0
         i = self.row - 1
         while i > 0:
             num = np.mean(self.board[i,:])
-            if num == 1:
+            if num == PIECE:
                 for j in range(i, 0, -1):
                     self.board[j,:] = self.board[j-1,:]
                 i += 1
                 row_count += 1
-            elif num == 0:
+            elif num == EMPTY:
                 break
             i -= 1
         self.reward = REWARD_FUNC(row_count)
-        if self.reward != 0: print(self.reward)
-        if row_count == 4: print("tetris")
+        if row_count != 0: print("tetris", row_count)

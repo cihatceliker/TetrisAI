@@ -81,8 +81,9 @@ class GameGrid():
     def key_down(self, event):
         if event.keycode == 24: # q
             self.quit = True
-        if not self.env.is_action and event.keycode in self.commands:
-            self.env.apply_action(self.commands[event.keycode])
+        if event.keycode in self.commands:
+            action = self.commands[event.keycode]
+            self.env.actions[action][0](self.env.actions[action][1])
         self.update()
 
 
