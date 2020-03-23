@@ -5,6 +5,7 @@ import random
 import pickle
 from environment import Environment
 from tkinter import Frame, Canvas, Tk
+#from dqn import Agent, Brain
 
 BACKGROUND_COLOR = "#000"
 PIECE_COLOR = "#fff"
@@ -19,13 +20,17 @@ class GameGrid():
         self.game = Canvas(self.root, width=width, height=height, bg=BACKGROUND_COLOR)
         self.game.pack()
 
-        #self.agent = pickle.load(open("allnighter/2340.tt", "rb"))
-        self.env = Environment()
+
+        #self.agent = Agent(Brain(4, 6), Brain(4, 6), 6)
+        #self.load_agent("trained.tt")
+        #self.agent.eps_start = 0
+
+        self.env = Environment(frame_stack=4)
         self.env.reset()
         self.speed = speed
         self.size = size
         self.rectangle_size = size/self.env.row
-        self.pause = True
+        self.pause = False
         self.quit = False
         self.commands = {
             113: 1, # Left
@@ -40,20 +45,38 @@ class GameGrid():
         threading.Thread(target=self.run_game).start()
         self.root.mainloop()
         
+    def load_agent(self, file): self.agent = pickle.load(open(file, "rb"))
+
     def run_game(self):
-        state = self.env.reset()
-        score = 0
-        action = 0
         while not self.quit:
-            #action = self.agent.select_action(state)
-            #action = np.random.randint(5)
-            next_state, reward, done, info = self.env.step(action)
-            score += reward
-            if done:
-                self.env.reset()
-            self.update()
-            time.sleep(self.speed)
-        print("done", score)
+            state = self.env.reset()
+            score = 0
+            self.action = 0
+            done = False
+            while not done:
+                if not self.pause:
+                    #self.action = self.agent.select_action(state)
+                    #action = np.random.randint(5)
+                    next_state, reward, done, info = self.env.step(self.action)
+                    #print(self.action)
+                    #self.action = 0
+                    
+                    #self.agent.store_experience(state, self.action, reward, next_state, 1-done)
+                    state = next_state
+
+                    score += reward
+                    #self.pause = True
+                    time.sleep(self.speed)
+                    if self.quit:
+                        break
+                self.update()
+        return
+        """
+            pickle_out = open("imit_agent.tt","wb")
+            pickle.dump(self.agent, pickle_out)
+            pickle_out.close()
+            print("agent safe", score)
+        """
 
     def update(self):
         for i in range(self.env.row):
@@ -82,6 +105,9 @@ class GameGrid():
         if event.keycode == 24: # q
             self.quit = True
         if event.keycode in self.commands:
+            #self.action = self.commands[event.keycode]
+            print("moved")
+            #self.pause = False
             action = self.commands[event.keycode]
             self.env.actions[action][0](self.env.actions[action][1])
         self.update()

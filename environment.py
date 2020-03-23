@@ -7,7 +7,7 @@ PIECE = 1.0
 
 REWARD_FUNC = lambda x: x ** 2
 DEATH_REWARD = -1
-DEFAULT_REWARD = -0.1
+DEFAULT_REWARD = 0
 
 # ARS rotation
 SHAPES = {
@@ -73,7 +73,7 @@ class Environment:
         self.board = np.ones((self.row, self.col)) * EMPTY
         self.state_history = [self.board] * self.frame_stack
         self.add_new_piece()
-        self.done = one = False
+        self.done = False
         return self.state_history[-self.frame_stack:]
 
     def step(self, action):
@@ -86,7 +86,13 @@ class Environment:
             self.add_new_piece()
         self.state_history.append(self.board)
 
-        if self.reward == 0: self.reward = DEFAULT_REWARD
+        if action == 5:
+            if self.reward <= 0: 
+                #self.reward += DEFAULT_REWARD
+                pass
+            else:
+                print("dropped and cleared")
+                self.reward *= 4
 
         return self.state_history[-self.frame_stack:], self.reward, self.done, self.info
 

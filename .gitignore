@@ -3,6 +3,8 @@ __pycache__/
 .vscode/
 *.tt
 allnighter/
+weights/
+imit.py
 todo.txt
 *.py[cod]
 *$py.class

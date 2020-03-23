@@ -11,11 +11,12 @@ frame_stack = 4
 
 env = Environment(frame_stack=frame_stack)
 
-agent = Agent(Brain(frame_stack, num_actions), Brain(frame_stack, num_actions), num_actions)
+#agent = Agent(Brain(frame_stack, num_actions), Brain(frame_stack, num_actions), num_actions)
+#start = 1
+
+agent = pickle.load(open("3140.tt", mode="rb"))
 start = 1
 
-#agent = pickle.load(open("1660.tt", mode="rb"))
-#start = agent.episodes[-1]+1
 
 for episode in range(start, num_iter):
     done = False
@@ -30,7 +31,7 @@ for episode in range(start, num_iter):
         score += reward
     
     agent.eps_start = max(agent.eps_end, agent.eps_decay * agent.eps_start)
-
+    
     agent.episodes.append(episode)
     agent.scores.append(score)
 
