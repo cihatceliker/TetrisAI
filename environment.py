@@ -5,7 +5,7 @@ import sys
 EMPTY = 0.0
 PIECE = 1.0
 
-REWARD_FUNC = lambda x: x ** 2
+REWARD_FUNC = lambda x: (x+1) ** 2
 DEATH_REWARD = -1
 DEFAULT_REWARD = 0
 
@@ -56,10 +56,11 @@ for n in range(4):
 
 class Environment:
 
-    def __init__(self, row=20, col=10, frame_stack=2):
+    def __init__(self, frame_stack, row=20, col=10):
         self.row = row
         self.col = col
         self.frame_stack = frame_stack
+        self.episode = 0
         self.actions = {
             0: (lambda x: 0, None),
             1: (self._move, (0,-1)),
@@ -70,6 +71,8 @@ class Environment:
         }
 
     def reset(self):
+        self.tick = 0
+        self.episode += 1
         self.board = np.ones((self.row, self.col)) * EMPTY
         self.state_history = [self.board] * self.frame_stack
         self.add_new_piece()
@@ -79,7 +82,6 @@ class Environment:
     def step(self, action):
         self.reward = 0
         self.info = ""
-
         self.actions[action][0](self.actions[action][1])
         if not self._move((1,0)):
             self.check_rows()
@@ -87,6 +89,7 @@ class Environment:
         self.state_history.append(self.board)
 
         if action == 5:
+            print("wrong")
             if self.reward <= 0: 
                 #self.reward += DEFAULT_REWARD
                 pass
@@ -97,6 +100,9 @@ class Environment:
         return self.state_history[-self.frame_stack:], self.reward, self.done, self.info
 
     def add_new_piece(self, drop_point=(1,5)):
+        self.tick += 1
+        np.random.seed(self.episode * 3001 + self.tick)
+
         self.rel_x, self.rel_y = drop_point
         self.rot_index = 0
         self.cur_index = np.random.randint(0,7)
@@ -161,5 +167,6 @@ class Environment:
             elif num == EMPTY:
                 break
             i -= 1
-        self.reward = REWARD_FUNC(row_count)
-        if row_count != 0: print("tetris", row_count)
+        if row_count != 0:
+            self.reward = REWARD_FUNC(row_count)
+            print("tetris", row_count)

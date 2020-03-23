@@ -14,12 +14,12 @@ class Brain(nn.Module):
         super(Brain, self).__init__()
         self.in_size = in_
         self.out_size = out_size
-        self.conv_row = nn.Conv2d(in_, 1, kernel_size=(1, 10))
-        self.conv_col = nn.Conv2d(in_, 1, kernel_size=(20, 1))
-        self.conv1 = nn.Conv2d(in_, 16, kernel_size=(4,4), stride=2)
-        self.conv2 = nn.Conv2d(16, 32, kernel_size=(7,3))
-        self.fc = nn.Linear(30+6*32, 64)
-        self.out = nn.Linear(64, out_size)
+        self.conv_row = nn.Conv2d(in_, in_, kernel_size=(1, 10))
+        self.conv_col = nn.Conv2d(in_, in_, kernel_size=(20, 1))
+        self.conv1 = nn.Conv2d(in_, 16, kernel_size=6)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=5)
+        self.fc = nn.Linear(120+32*11, 128)
+        self.out = nn.Linear(128, out_size)
         
     def forward(self, state):
         x_row = torch.relu(self.conv_row(state)).view(state.size(0), 1, -1)
@@ -29,14 +29,27 @@ class Brain(nn.Module):
         x = torch.cat((x, x_row, x_col), dim=2)
         x = torch.relu(self.fc(x))
         return self.out(x)
-
+    
+    """
+        def __init__(self, in_, out_size):
+            super(Brain, self).__init__()
+            self.fc1 = nn.Linear(400, 256)
+            self.fc2 = nn.Linear(256, 256)
+            self.out = nn.Linear(256, out_size)
+            
+        def forward(self, state):
+            x = state.view(state.size(0), 1, -1)
+            x = torch.relu(self.fc1(x))
+            x = torch.relu(self.fc2(x))
+            return self.out(x)
+    """
 
 class Agent():
     
-    def __init__(self, local_Q, target_Q, num_actions, eps_start=1.0, eps_end=0.01,
-                 eps_decay=0.996, gamma=0.99, alpha=25e-5, batch_size=128, memory_capacity=1e4, tau=1e-3):
-        self.local_Q = local_Q.to(device)
-        self.target_Q = target_Q.to(device)
+    def __init__(self, frame_stack, num_actions, eps_start=1.0, eps_end=0.05,
+                 eps_decay=0.997, gamma=0.99, alpha=5e-4, batch_size=256, memory_capacity=1e4, tau=1e-3):
+        self.local_Q = Brain(frame_stack, num_actions).to(device)
+        self.target_Q = Brain(frame_stack, num_actions).to(device)
         self.target_Q.load_state_dict(self.local_Q.state_dict())
         self.target_Q.eval()
         self.optimizer = optim.Adam(self.local_Q.parameters(), lr=alpha)
@@ -51,6 +64,8 @@ class Agent():
         self.replay_memory = ReplayMemory(memory_capacity)
         self.scores = []
         self.episodes = []
+        self.env_episodes = []
+        self.durations = []
         self.batch_index = np.arange(self.batch_size)
 
     def store_experience(self, *args):
@@ -103,13 +118,14 @@ class ReplayMemory:
         if len(self.memory) < self.capacity:
             self.memory.append(None)
         else:
-            if self.position % self.capacity == 0:
-                self.position = 1683
+            while self.memory[int(self.position)][2] > 0: # and np.random.random() < 0.98:
+                self.position = (self.position + 1) % self.capacity
                 print("skipped")
             """
-            else:
-                while np.random.random() < 0.8 and self.memory[int(self.position)][2] > 0:
-                    self.position = (self.position + 1) % self.capacity
+                #while np.random.random() < 0.8 and self.memory[int(self.position)][2] > 0:
+                if self.position % self.capacity == 0:
+                    self.position = 1683
+                    print("skipped")
             """
         self.memory[int(self.position)] = args[0]
         self.position = (self.position + 1) % self.capacity

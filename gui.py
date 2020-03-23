@@ -12,7 +12,7 @@ PIECE_COLOR = "#fff"
 
 class GameGrid():
 
-    def __init__(self, speed=0.3, size=720):
+    def __init__(self, speed=0.01, size=720):
         width = size / 2
         height = size
         self.root = Tk()
@@ -22,10 +22,10 @@ class GameGrid():
 
 
         #self.agent = Agent(Brain(4, 6), Brain(4, 6), 6)
-        #self.load_agent("trained.tt")
-        #self.agent.eps_start = 0
+        self.load_agent("3000.tt")
+        self.agent.eps_start = 0
 
-        self.env = Environment(frame_stack=4)
+        self.env = Environment(frame_stack=2)
         self.env.reset()
         self.speed = speed
         self.size = size
@@ -48,15 +48,16 @@ class GameGrid():
     def load_agent(self, file): self.agent = pickle.load(open(file, "rb"))
 
     def run_game(self):
-        while not self.quit:
+        score = 0
+        for i in range(20):
             state = self.env.reset()
-            score = 0
+            #score = 0
             self.action = 0
             done = False
             while not done:
                 if not self.pause:
-                    #self.action = self.agent.select_action(state)
-                    #action = np.random.randint(5)
+                    self.action = self.agent.select_action(state)
+                    #self.action = np.random.randint(5)
                     next_state, reward, done, info = self.env.step(self.action)
                     #print(self.action)
                     #self.action = 0
@@ -64,12 +65,13 @@ class GameGrid():
                     #self.agent.store_experience(state, self.action, reward, next_state, 1-done)
                     state = next_state
 
-                    score += reward
+                    score += 1
                     #self.pause = True
                     time.sleep(self.speed)
                     if self.quit:
                         break
                 self.update()
+        print("done",score)
         return
         """
             pickle_out = open("imit_agent.tt","wb")
