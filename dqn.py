@@ -10,44 +10,18 @@ device = torch.device("cuda")
 
 class Brain(nn.Module):
 
-    def __init__(self, in_, out_size):
+    def __init__(self, out_size):
         super(Brain, self).__init__()
-        self.in_size = in_
-        self.out_size = out_size
-        self.conv_row = nn.Conv2d(in_, in_, kernel_size=(1, 10))
-        self.conv_col = nn.Conv2d(in_, in_, kernel_size=(20, 1))
-        self.conv1 = nn.Conv2d(in_, 16, kernel_size=6)
-        self.conv2 = nn.Conv2d(16, 32, kernel_size=5)
-        self.fc = nn.Linear(120+32*11, 128)
-        self.out = nn.Linear(128, out_size)
-        
+
+
     def forward(self, state):
-        x_row = torch.relu(self.conv_row(state)).view(state.size(0), 1, -1)
-        x_col = torch.relu(self.conv_col(state)).view(state.size(0), 1, -1)
-        x = torch.relu(self.conv1(state))
-        x = torch.relu(self.conv2(x)).view(state.size(0), 1, -1)
-        x = torch.cat((x, x_row, x_col), dim=2)
-        x = torch.relu(self.fc(x))
-        return self.out(x)
-    
-    """
-        def __init__(self, in_, out_size):
-            super(Brain, self).__init__()
-            self.fc1 = nn.Linear(400, 256)
-            self.fc2 = nn.Linear(256, 256)
-            self.out = nn.Linear(256, out_size)
-            
-        def forward(self, state):
-            x = state.view(state.size(0), 1, -1)
-            x = torch.relu(self.fc1(x))
-            x = torch.relu(self.fc2(x))
-            return self.out(x)
-    """
+        pass    
+
 
 class Agent():
     
-    def __init__(self, frame_stack, num_actions, eps_start=1.0, eps_end=0.05,
-                 eps_decay=0.997, gamma=0.99, alpha=5e-4, batch_size=256, memory_capacity=1e4, tau=1e-3):
+    def __init__(self, frame_stack, num_actions, eps_start=1.0, eps_end=0,
+                 eps_decay=0.997, gamma=0.99, alpha=5e-3, batch_size=64, memory_capacity=5e3, tau=1e-3):
         self.local_Q = Brain(frame_stack, num_actions).to(device)
         self.target_Q = Brain(frame_stack, num_actions).to(device)
         self.target_Q.load_state_dict(self.local_Q.state_dict())
@@ -69,6 +43,8 @@ class Agent():
         self.batch_index = np.arange(self.batch_size)
 
     def store_experience(self, *args):
+        if args[2] == 0 and np.random.random() < 0.9:
+            return
         self.replay_memory.push(args)
 
     def select_action(self, state):
@@ -118,7 +94,12 @@ class ReplayMemory:
         if len(self.memory) < self.capacity:
             self.memory.append(None)
         else:
-            while self.memory[int(self.position)][2] > 0: # and np.random.random() < 0.98:
+
+            while self.memory[int(self.position)][2] > 4:
+                self.position = (self.position + 1) % self.capacity
+                print("skipped for bigger")
+
+            while self.memory[int(self.position)][2] == 4: # and np.random.random() < 0.999:
                 self.position = (self.position + 1) % self.capacity
                 print("skipped")
             """

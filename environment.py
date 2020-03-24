@@ -5,7 +5,7 @@ import sys
 EMPTY = 0.0
 PIECE = 1.0
 
-REWARD_FUNC = lambda x: (x+1) ** 2
+REWARD_FUNC = lambda x: x
 DEATH_REWARD = -1
 DEFAULT_REWARD = 0
 
@@ -74,7 +74,7 @@ class Environment:
         self.tick = 0
         self.episode += 1
         self.board = np.ones((self.row, self.col)) * EMPTY
-        self.state_history = [self.board] * self.frame_stack
+        self.state_history = [self.board.copy()] * self.frame_stack
         self.add_new_piece()
         self.done = False
         return self.state_history[-self.frame_stack:]
@@ -86,10 +86,9 @@ class Environment:
         if not self._move((1,0)):
             self.check_rows()
             self.add_new_piece()
-        self.state_history.append(self.board)
+        self.state_history.append(self.board.copy())
 
         if action == 5:
-            print("wrong")
             if self.reward <= 0: 
                 #self.reward += DEFAULT_REWARD
                 pass
@@ -168,5 +167,5 @@ class Environment:
                 break
             i -= 1
         if row_count != 0:
-            self.reward = REWARD_FUNC(row_count)
+            self.reward = row_count#REWARD_FUNC(row_count)
             print("tetris", row_count)

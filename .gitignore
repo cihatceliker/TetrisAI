@@ -2,8 +2,7 @@
 __pycache__/
 .vscode/
 *.tt
-allnighter/
-weights/
+irrelevant/
 imit.py
 todo.txt
 *.py[cod]
