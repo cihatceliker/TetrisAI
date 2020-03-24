@@ -9,6 +9,9 @@ REWARD_FUNC = lambda x: x
 DEATH_REWARD = -1
 DEFAULT_REWARD = 0
 
+INFO_NORMAL = -1
+INFO_GROUND = -2
+
 # ARS rotation
 SHAPES = {
     0: [
@@ -56,28 +59,23 @@ for n in range(4):
 
 class Environment:
 
-    def __init__(self, frame_stack, row=20, col=10):
+    def __init__(self, row=20, col=10):
         self.row = row
         self.col = col
-        self.frame_stack = frame_stack
-        self.episode = 0
         self.actions = {
             0: (lambda x: 0, None),
             1: (self._move, (0,-1)),
             2: (self._move, (0,1)),
             3: (self._rotate, False), 
             4: (self._rotate, True),
-            5: (self._drop, None)
+            #5: (self._drop, None)
         }
 
     def reset(self):
-        self.tick = 0
-        self.episode += 1
         self.board = np.ones((self.row, self.col)) * EMPTY
-        self.state_history = [self.board.copy()] * self.frame_stack
         self.add_new_piece()
         self.done = False
-        return self.state_history[-self.frame_stack:]
+        return self.board.copy()
 
     def step(self, action):
         self.reward = 0
@@ -86,22 +84,13 @@ class Environment:
         if not self._move((1,0)):
             self.check_rows()
             self.add_new_piece()
-        self.state_history.append(self.board.copy())
+            self.info = INFO_GROUND
+        else:
+            self.info = INFO_NORMAL
 
-        if action == 5:
-            if self.reward <= 0: 
-                #self.reward += DEFAULT_REWARD
-                pass
-            else:
-                print("dropped and cleared")
-                self.reward *= 4
-
-        return self.state_history[-self.frame_stack:], self.reward, self.done, self.info
+        return self.board.copy(), self.reward, self.done, self.info
 
     def add_new_piece(self, drop_point=(1,5)):
-        self.tick += 1
-        np.random.seed(self.episode * 3001 + self.tick)
-
         self.rel_x, self.rel_y = drop_point
         self.rot_index = 0
         self.cur_index = np.random.randint(0,7)
@@ -149,23 +138,19 @@ class Environment:
         self._set(num=PIECE)
         return False
 
+    def check_rows(self):
+        row_count = 0
+        idxs = []
+        for i in range(self.row-1, 0, -1):
+            if not EMPTY in self.board[i,:]:
+                idxs.append(i)
+        row_count = len(idxs)
+        for idx in reversed(idxs):
+            self.board[1:idx+1,:] = self.board[0:idx,:]
+        if row_count != 0:
+            self.reward = REWARD_FUNC(row_count)
+            print("tetris", row_count)
+
     def _drop(self, _):
         while self._move((1,0)):
             pass
-
-    def check_rows(self):
-        row_count = 0
-        i = self.row - 1
-        while i > 0:
-            num = np.mean(self.board[i,:])
-            if num == PIECE:
-                for j in range(i, 0, -1):
-                    self.board[j,:] = self.board[j-1,:]
-                i += 1
-                row_count += 1
-            elif num == EMPTY:
-                break
-            i -= 1
-        if row_count != 0:
-            self.reward = row_count#REWARD_FUNC(row_count)
-            print("tetris", row_count)
