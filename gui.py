@@ -6,6 +6,7 @@ import pickle
 from environment import Environment, INFO_GROUND, INFO_NORMAL
 from tkinter import Frame, Canvas, Tk
 from dqn import Agent, Brain, ReplayMemory
+from pyscreenshot import grab
 
 BACKGROUND_COLOR = "#000"
 PIECE_COLOR = "#fff"
@@ -19,16 +20,22 @@ class GameGrid():
         self.root.configure(background=BACKGROUND_COLOR)
         self.game = Canvas(self.root, width=width, height=height, bg=BACKGROUND_COLOR)
         self.game.pack()
-        self.agent = pickle.load(open("1300.tt", "rb"))
-        #self.agent = Agent(Brain(4, 6), Brain(4, 6), 6)
         self.env = Environment()
         self.env.reset()
-
+        self.agent = Agent(6)
+        self.agent = pickle.load(open("new_agent99001.tt", "rb"))
+        """
+        for m in self.agent.replay_memory.memory:
+            if m[2] > 0:
+                print(m[2])
+                self.stacked = m[0]
+        """
         self.speed = speed
         self.size = size
         self.rectangle_size = size/self.env.row
         self.pause = False
         self.quit = False
+        self.image_counter = 0
         self.commands = {
             113: 1, # Left
             114: 2, # Right
@@ -42,10 +49,51 @@ class GameGrid():
 
         #threading.Thread(target=self.watch_history).start()
         threading.Thread(target=self.watch_play).start()
+        #threading.Thread(target=self.play).start()
         self.root.mainloop()
 
-    def watch_play(self):
+    def play(self):
+        self.action = 0
+        while not self.quit:
+            done = False
+            state = self.env.reset()
+            while not done:
+                stacked_state = [state]
+                actions = []
+                info = INFO_NORMAL
+                print(len(self.agent.replay_memory.memory))
+                while info != INFO_GROUND:
+                    #action = self.agent.select_action(stacked_state)
+                    #action = np.random.randint(num_actions)
+                    if not self.pause:
+                        self.pause = True
+                        state, reward, done, info = self.env.step(self.action)
 
+                        actions.append(self.action)
+                        stacked_state.append(state)
+                        self.board = self.env.board
+                        self.update()
+
+                        self.action = 0
+
+                        time.sleep(self.speed)
+                    if self.quit:
+                        done = True
+                self.agent.store_experience(stacked_state, actions, reward, 1-done)
+
+        pickle_out = open("asasas.tt","wb")
+        pickle.dump(self.agent, pickle_out)
+        pickle_out.close()
+
+    def take_screenshot(self):
+        # game windows should be on the left bottom corner
+        x = 1
+        y = 359
+        img = grab(bbox=(x,y,x+357,y+718))
+        img.save("ss"+str(self.image_counter)+".png")
+        self.image_counter += 1
+
+    def watch_play(self):
         while not self.quit:
             state = self.env.reset()
             done = False
@@ -70,15 +118,18 @@ class GameGrid():
                 curr = int(self.board[i, j])
                 color = BACKGROUND_COLOR if curr == 0 else PIECE_COLOR
                 self.game.itemconfig(rect, fill=color)
+        #self.take_screenshot()
+            
 
     def key_down(self, event):
         if event.keycode == 24: # q
             self.quit = True
         if event.keycode in self.commands:
-            #self.action = self.commands[event.keycode]
-            action = self.commands[event.keycode]
-            self.env.actions[action][0](self.env.actions[action][1])
-        self.update()
+            self.action = self.commands[event.keycode]
+            self.pause = False
+            #action = self.commands[event.keycode]
+            #self.env.actions[action][0](self.env.actions[action][1])
+        #self.update()
 
     def watch_history(self):
         """
@@ -90,8 +141,9 @@ class GameGrid():
                 time.sleep(self.speed)
                 self.update()
         """
-        for stacked_state,_,_,_ in self.agent.replay_memory.memory:
-            for state in stacked_state:
+        #for stacked_state,_,_,_ in self.agent.replay_memory.memory:
+        while True:
+            for state in self.stacked:
                 #self.board = stacked_state[-1]
                 self.board = state
                 self.update()

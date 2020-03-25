@@ -47,7 +47,7 @@ class Brain(nn.Module):
 class Agent():
     
     def __init__(self, num_actions, eps_start=1.0, eps_end=0.05,
-                 eps_decay=0.998, gamma=0.99, alpha=5e-4, memory_capacity=2e3, tau=1e-3):
+                 eps_decay=0.998, gamma=0.99, alpha=5e-2, memory_capacity=3e3, tau=1e-3):
         self.local_Q = Brain(num_actions).to(device)
         self.target_Q = Brain(num_actions).to(device)
         self.target_Q.load_state_dict(self.local_Q.state_dict())
@@ -79,43 +79,41 @@ class Agent():
             action = np.random.randint(self.num_actions)
         return action
 
-    def learn(self):
-        stacked_states, stacked_actions, reward, done = self.replay_memory.sample()
-        #print("len stack",len(stacked_states),"timesteps",|
-            #len(stacked_actions),"reward done", reward, done,"\n", "-"*50)
+    def learn(self, batch=None):
+        for _ in range(4):
+            stacked_states, stacked_actions, reward, done = batch if batch else self.replay_memory.sample()
 
-        cnn_out = self.local_Q.extract_features(stacked_states)
-        loss = 0
-        hidden = self.local_Q.init_hidden()
-        for timestep in range(len(stacked_actions)):
-            action = stacked_actions[timestep]
+            cnn_out = self.local_Q.extract_features(stacked_states)
+            loss = 0
+            hidden = self.local_Q.init_hidden()
 
-            state_features = cnn_out[:,timestep].unsqueeze(1)
-            next_state_features = cnn_out[:,timestep+1].unsqueeze(1)
-            
-            output, hidden_ = self.local_Q(state_features, hidden)
-            target = output.clone()
+            for timestep in range(len(stacked_actions)):
+                action = stacked_actions[timestep]
 
-            next_out, _ = self.target_Q(next_state_features, hidden)
-            hidden = hidden_
-            next_out = torch.max(next_out, dim=2)[0].squeeze(1)
+                state_features = cnn_out[:,timestep].unsqueeze(1)
+                next_state_features = cnn_out[:,timestep+1].unsqueeze(1)
+                
+                output, hidden_ = self.local_Q(state_features, hidden)
+                target = output.clone()
 
-            # vanilla dqn
-            target[:,:,action] = reward + self.gamma * next_out * done
+                next_out, _ = self.target_Q(next_state_features, hidden)
+                hidden = hidden_
+                next_out = torch.max(next_out, dim=2)[0].squeeze(1)
 
-            loss += self.loss(output, target.detach()).to(device)
+                # vanilla dqn
+                target[:,:,action] = reward + self.gamma * next_out * done
 
-        self.optimize(loss)
+                loss += self.loss(output, target.detach()).to(device)
 
-    def optimize(self, loss):
-        self.optimizer.zero_grad()
-        loss.backward()
-        #for param in self.local_Q.parameters(): param.grad.data.clamp_(-1, 1)
-        self.optimizer.step()
 
-        # soft update
-        for target_param, local_param in zip(self.target_Q.parameters(), self.local_Q.parameters()):
-            target_param.data.copy_(self.tau * local_param.data + (1 - self.tau) * target_param.data)
+            self.optimizer.zero_grad()
+            loss.backward()
+            #for param in self.local_Q.parameters(): param.grad.data.clamp_(-1, 1)
+            self.optimizer.step()
+
+            # soft update
+            for target_param, local_param in zip(self.target_Q.parameters(), self.local_Q.parameters()):
+                target_param.data.copy_(self.tau * local_param.data + (1 - self.tau) * target_param.data)
 
 
 class ReplayMemory:
@@ -129,18 +127,12 @@ class ReplayMemory:
         if len(self.memory) < self.capacity:
             self.memory.append(None)
         else:
-            while self.memory[int(self.position)][2] > 0:
+            while self.memory[int(self.position)][2] > 1:
                 self.position = (self.position + 1) % self.capacity
-                print("skipped")
-            """
-                while self.memory[int(self.position)][2] == 4: # and np.random.random() < 0.999:
-                    self.position = (self.position + 1) % self.capacity
-                    print("skipped")
-                    #while np.random.random() < 0.8 and self.memory[int(self.position)][2] > 0:
-                    if self.position % self.capacity == 0:
-                        self.position = 1683
-                        print("skipped")
-            """
+                #print("skipped")
+            while self.memory[int(self.position)][2] == 1 and np.random.random() < 0.95:
+                self.position = (self.position + 1) % self.capacity
+
         self.memory[int(self.position)] = args[0]
         self.position = (self.position + 1) % self.capacity
 

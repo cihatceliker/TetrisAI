@@ -9,11 +9,10 @@ num_actions = 5
 num_iter = 5000
 
 env = Environment()
-agent = Agent(num_actions)
-#agent = pickle.load(open("300.tt", mode="rb"))
+#agent = Agent(num_actions)
+agent = pickle.load(open("new_agent99001.tt", mode="rb"))
 start = agent.start
-
-#for m in agent.replay_memory.memory: print(len(m[1]), len(m[0]))
+agent.eps_start = 0.6
 
 total_duration = 0
 for episode in range(start, num_iter):

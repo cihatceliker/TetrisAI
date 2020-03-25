@@ -68,7 +68,7 @@ class Environment:
             2: (self._move, (0,1)),
             3: (self._rotate, False), 
             4: (self._rotate, True),
-            #5: (self._drop, None)
+            5: (self._drop, None)
         }
 
     def reset(self):
