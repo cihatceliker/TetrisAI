@@ -12,7 +12,7 @@ save_interval = 100
 
 env = Environment()
 agent = Agent(num_actions)
-#agent.load("4300")
+#agent.load("2600")
 #agent.load_memory("curr")
 start = agent.start+1
 
@@ -24,6 +24,7 @@ for episode in range(start, num_iter):
     trajectory = []
     
     agent.init_hidden()
+    
     while not done:
         action = agent.select_action(state)
         next_state, reward, done = env.step(action)
@@ -41,7 +42,7 @@ for episode in range(start, num_iter):
     agent.scores.append(score)
     agent.durations.append(ep_duration)
     agent.start = episode
-    
+
     if episode % print_interval == 0:
         avg_score = np.mean(agent.scores[max(0, episode-print_interval):(episode+1)])
         avg_duration = np.mean(agent.durations[max(0, episode-print_interval):(episode+1)])

@@ -14,22 +14,23 @@ class Brain(nn.Module):
     def __init__(self, out_size):
         super(Brain, self).__init__()
         self.out_size = out_size
-        self.convR = nn.Conv2d(1, 4, kernel_size=(1,10))
-        self.convC = nn.Conv2d(1, 4, kernel_size=(20,1))
+        self.convR = nn.Conv2d(1, 6, kernel_size=(1,10))
+        self.convC = nn.Conv2d(1, 6, kernel_size=(20,1))
         self.conv1 = nn.Conv2d(1, 6, kernel_size=4)
-        self.conv2 = nn.Conv2d(6, 12, kernel_size=4)
-        self.conv3 = nn.Conv2d(12, 16, kernel_size=4)
-        self.rnn = nn.GRU(16*11+120, 64, 1)
+        self.conv2 = nn.Conv2d(6, 12, kernel_size=3)
+        self.conv3 = nn.Conv2d(12, 16, kernel_size=3)
+        self.rnn = nn.LSTM(16*39+180, 64, 1)
+        self.dropout = nn.Dropout(0.2)
         self.out = nn.Linear(64, out_size)
 
     def init_hidden(self, sz=64):
-        return torch.zeros((sz), device=device, dtype=torch.float).view(1,1,sz).detach()
+        return [torch.zeros((sz), device=device, dtype=torch.float).view(1,1,sz).detach()]*2
 
     def forward(self, batch):
         self.rnn.flatten_parameters()
         cnn_out = self.extract_features(batch)
         output, hidden = self.rnn(cnn_out)
-        return self.out(output), hidden
+        return self.out(self.dropout(output)), hidden
         
     def extract_features(self, state):
         xR = torch.relu(self.convR(state)).view(state.size(0), 1, -1)
@@ -43,13 +44,13 @@ class Brain(nn.Module):
         self.rnn.flatten_parameters()
         cnn_out = self.extract_features(state)
         output, hidden = self.rnn(cnn_out, hidden)
-        return self.out(output), hidden
+        return self.out(self.dropout(output)), hidden
     
 
 class Agent():
     
     def __init__(self, num_actions, eps_start=1.0, eps_end=0.1, eps_decay=0.995,
-                            gamma=0.99, memory_capacity=500, alpha=1e-3, tau=1e-3):
+                            gamma=0.99, memory_capacity=500, alpha=2e-3, tau=1e-3):
         self.local_Q = Brain(num_actions).to(device)
         self.target_Q = Brain(num_actions).to(device)
         self.target_Q.load_state_dict(self.local_Q.state_dict())
@@ -75,10 +76,13 @@ class Agent():
 
     def select_action(self, state):
         if np.random.random() > self.eps_start:
+            # for dropout
+            self.local_Q.eval()
             with torch.no_grad():
                 obs = torch.tensor(state, device=device, dtype=torch.float).view(1,1,20,10)
                 output, self.hidden = self.local_Q.select_action(obs, self.hidden)
                 action = torch.argmax(output).item()
+            self.local_Q.train()
         else:
             action = np.random.randint(self.num_actions)
         return action
@@ -92,7 +96,7 @@ class Agent():
             reward_batch = torch.tensor(batch[2][:-1], device=device)
             done_batch = torch.tensor(batch[3][:-1], device=device)
 
-            local_out, _ = self.local_Q(state_batch[:-1])
+            local_out, a = self.local_Q(state_batch[:-1])
             target_out, _ = self.target_Q(state_batch[1:])
             target = local_out.clone()
             target_out = torch.max(target_out, dim=2)[0].squeeze(1)

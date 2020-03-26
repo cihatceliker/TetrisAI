@@ -3,7 +3,7 @@ import threading
 import numpy as np
 import random
 import pickle
-from environment import Environment
+from environment import Environment, SHADOW
 from tkinter import Frame, Canvas, Tk
 from dqn import Agent, Brain
 from pyscreenshot import grab
@@ -23,8 +23,9 @@ class GameGrid():
         self.env = Environment()
         self.env.reset()
         self.agent = Agent(6)
+        """
         self.agent.load("4300")
-        #self.agent.load_memory("curr")
+        self.agent.load_memory("curr")
         self.rewarded_episode = []
         cnt = 0
         for episode in self.agent.replay_memory.memory:
@@ -37,6 +38,7 @@ class GameGrid():
         mx = 0
         for duration in self.agent.durations:
             mx = max(mx, duration)
+        """
 
         self.speed = speed
         self.size = size
@@ -56,8 +58,8 @@ class GameGrid():
         self.root.title('Tetris')
         self.root.bind("<Key>", self.key_down)
 
-        threading.Thread(target=self.watch_history).start()
-        #threading.Thread(target=self.play).start()
+        #threading.Thread(target=self.watch_history).start()
+        threading.Thread(target=self.play).start()
         self.root.mainloop()
 
     def play(self):
@@ -65,26 +67,27 @@ class GameGrid():
         while not self.quit:
             done = False
             state = self.env.reset()
-            trajectory = []
+            #trajectory = []
             while not done:
                 if not self.pause:
                     self.pause = True
                     next_state, reward, done = self.env.step(self.action)
-                    trajectory.append([state, self.action, reward, 1-done])
+                    #trajectory.append([state, self.action, reward, 1-done])
                     state = next_state
                     self.action = 0
-                    self.board = self.env.board
+                    self.board = state
                     self.update()
                     time.sleep(self.speed)
                     if self.quit:
                         done = True
+        """
 
             trajectory.append([next_state, None, None, None])
             self.agent.store_experience(trajectory)
-
         pickle_out = open("asasas"+str(np.random.random())+".tt","wb")
         pickle.dump(self.agent, pickle_out)
         pickle_out.close()
+        """
 
     def take_screenshot(self):
         # game windows should be on the left bottom corner
@@ -98,8 +101,11 @@ class GameGrid():
         for i in range(self.board.shape[0]):
             for j in range(self.board.shape[1]):
                 rect = self.game_area[i][j]
-                curr = int(self.board[i, j])
+                curr = self.board[i, j]
                 color = BACKGROUND_COLOR if curr == 0 else PIECE_COLOR
+                if curr == SHADOW:
+                    color = "blue"
+                    print(curr)
                 self.game.itemconfig(rect, fill=color)
         #self.take_screenshot()
 

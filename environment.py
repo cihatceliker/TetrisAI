@@ -5,10 +5,12 @@ import sys
 
 EMPTY = 0.0
 PIECE = 1.0
+CURRENT = -1.0
+SHADOW = -0.5
 
-CLEAR_REWARD = lambda x: x
+CLEAR_REWARD = lambda x: x ** 2
 DEATH_REWARD = -1
-NON_DROP = 0
+NON_DROP = 0#-0.01
 DROP_CLEAR = 0.2
 
 
@@ -97,7 +99,25 @@ class Environment:
     def process_state(self):
         cp = self.board.copy()
         for x, y in self.current_piece:
-            cp[x+self.rel_x, y+self.rel_y] = -1
+            cp[x+self.rel_x, y+self.rel_y] = CURRENT
+
+        # an ugly code piece to draw shadow of the current piece
+        rel_x = self.rel_x
+        while True:
+            x, y = rel_x, self.rel_y
+            for i, j in self.current_piece:
+                cp[i+x,j+y] = EMPTY
+            if self.is_available(self.current_piece, (1,0), (rel_x, self.rel_y), cp):
+                rel_x += 1
+                x, y = rel_x, self.rel_y
+                for i, j in self.current_piece:
+                    cp[i+x,j+y] = SHADOW
+                continue
+            for x, y in self.current_piece:
+                cp[x+rel_x, y+self.rel_y] = SHADOW
+            for x, y in self.current_piece:
+                cp[x+self.rel_x, y+self.rel_y] = PIECE
+            break
         return cp
 
     def add_new_piece(self, drop_point=(1,5)):
@@ -105,21 +125,21 @@ class Environment:
         self.rot_index = 0
         self.cur_index = np.random.randint(0,7)
         self.current_piece = ALL_SHAPES[self.rot_index][self.cur_index]
-        if not self.is_available(self.current_piece, (0, 0)):
+        if not self.is_available(self.current_piece, (0, 0), (self.rel_x, self.rel_y), self.board):
             self.done = True
             self.reward = DEATH_REWARD
         else:
             self._set(num=PIECE)
 
-    def is_available(self, shape, to):
+    def is_available(self, shape, to, relative, board):
         x, y = to
-        k, l = self.rel_x, self.rel_y
+        k, l = relative
         for i, j in shape:
             # out of bounds
             if i+x+k >= self.row or j+y+l < 0 or j+y+l >= self.col:
                 return False
             # is the tile occupied by others
-            if self.board[i+x+k, j+y+l] == PIECE:
+            if board[i+x+k, j+y+l] == PIECE:
                 return False
         return True
 
@@ -128,7 +148,7 @@ class Environment:
         new_rot_idx = (self.rot_index + to) % 4
         rotated_piece = ALL_SHAPES[new_rot_idx][self.cur_index]
         self._set(num=EMPTY)
-        if self.is_available(rotated_piece, (0,0)):
+        if self.is_available(rotated_piece, (0,0), (self.rel_x, self.rel_y), self.board):
             self.current_piece = rotated_piece
             self.rot_index = new_rot_idx
         self._set(num=PIECE)
@@ -140,7 +160,7 @@ class Environment:
 
     def _move(self, to):
         self._set(num=EMPTY)
-        if self.is_available(self.current_piece, to):
+        if self.is_available(self.current_piece, to, (self.rel_x, self.rel_y), self.board):
             self.rel_x += to[0]
             self.rel_y += to[1]
             self._set(num=PIECE)
@@ -160,7 +180,7 @@ class Environment:
         if row_count != 0:
             self.reward = CLEAR_REWARD(row_count)
             print("tetris", row_count)
-            #os.system("audacious " + "clicksound.wav")
+            #os.system("audacious " + "irrelevant/clicksound.wav")
 
     def _drop(self, _):
         while self._move((1,0)):
