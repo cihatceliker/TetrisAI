@@ -19,15 +19,16 @@ class Brain(nn.Module):
         self.conv1 = nn.Conv2d(1, 6, kernel_size=4)
         self.conv2 = nn.Conv2d(6, 12, kernel_size=4)
         self.conv3 = nn.Conv2d(12, 16, kernel_size=4)
-        self.rnn = nn.GRU(16*11+120, 64, 1, batch_first=True)
+        self.rnn = nn.GRU(16*11+120, 64, 1)
         self.out = nn.Linear(64, out_size)
 
     def init_hidden(self, sz=64):
-        return torch.zeros((sz), device=device, dtype=torch.float).view(1,1,sz)
+        return torch.zeros((sz), device=device, dtype=torch.float).view(1,1,sz).detach()
 
-    def forward(self, x, hidden):
+    def forward(self, batch):
         self.rnn.flatten_parameters()
-        output, hidden = self.rnn(x, hidden)
+        cnn_out = self.extract_features(batch)
+        output, hidden = self.rnn(cnn_out)
         return self.out(output), hidden
         
     def extract_features(self, state):
@@ -39,14 +40,16 @@ class Brain(nn.Module):
         return torch.cat([x, xR, xC], dim=2)
 
     def select_action(self, state, hidden):
-        x = self.extract_features(state)
-        return self.forward(x, hidden)
+        self.rnn.flatten_parameters()
+        cnn_out = self.extract_features(state)
+        output, hidden = self.rnn(cnn_out, hidden)
+        return self.out(output), hidden
     
 
 class Agent():
     
-    def __init__(self, num_actions, eps_start=1.0, eps_end=0.1, eps_decay=0.997,
-                            gamma=0.99, memory_capacity=200, alpha=1e-3, tau=1e-3):
+    def __init__(self, num_actions, eps_start=1.0, eps_end=0.1, eps_decay=0.995,
+                            gamma=0.99, memory_capacity=500, alpha=1e-3, tau=1e-3):
         self.local_Q = Brain(num_actions).to(device)
         self.target_Q = Brain(num_actions).to(device)
         self.target_Q.load_state_dict(self.local_Q.state_dict())
@@ -68,7 +71,7 @@ class Agent():
         self.key = "curr"
 
     def init_hidden(self):
-        self.hidden = self.local_Q.init_hidden().detach()
+        self.hidden = self.local_Q.init_hidden()
 
     def select_action(self, state):
         if np.random.random() > self.eps_start:
@@ -81,29 +84,24 @@ class Agent():
         return action
 
     def learn(self):
-        for _ in range(16):
-            episodic_trajectory = self.replay_memory.sample()
-            loss = 0
-            hidden = self.local_Q.init_hidden()
-            timesteps = len(episodic_trajectory)
-            cnn_in = torch.zeros((timesteps, 1, 20, 10), device=device, dtype=torch.float)
-            for i in range(timesteps):
-                x = torch.tensor(episodic_trajectory[i][0])
-                cnn_in[i] = x
-            cnn_out = self.local_Q.extract_features(cnn_in)
+        for _ in range(32):
+            batch = list(zip(*self.replay_memory.sample()))
             
-            for timestep in range(timesteps-1):
+            state_batch = torch.tensor(batch[0], device=device, dtype=torch.float).unsqueeze(1)
+            action_batch = torch.tensor(batch[1][:-1], device=device)
+            reward_batch = torch.tensor(batch[2][:-1], device=device)
+            done_batch = torch.tensor(batch[3][:-1], device=device)
 
-                _, action, reward, done = episodic_trajectory[timestep]
-                state_features = cnn_out[timestep].unsqueeze(0)
-                next_state_features = cnn_out[timestep+1].unsqueeze(0)
-                output, hidden = self.local_Q(state_features, hidden)
-                target = output.clone()
-                next_out, _ = self.target_Q(next_state_features, hidden)
-                next_out = torch.max(next_out, dim=2)[0].squeeze(1)
-                target[:,:,action] = reward + self.gamma * next_out * done
-                loss += self.loss(output, target.detach()).to(device)
+            local_out, _ = self.local_Q(state_batch[:-1])
+            target_out, _ = self.target_Q(state_batch[1:])
+            target = local_out.clone()
+            target_out = torch.max(target_out, dim=2)[0].squeeze(1)
+            indexes = np.arange(len(state_batch)-1)
+            old = target.clone()
 
+            target[indexes,0,action_batch] = reward_batch + self.gamma * target_out * done_batch
+            
+            loss = self.loss(local_out, target.detach()).to(device)
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
