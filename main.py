@@ -12,10 +12,10 @@ save_interval = 100
 
 env = Environment()
 agent = Agent(num_actions)
-agent.load("2200")
+
+agent.load("4300")
 agent.load_memory("curr")
 start = agent.start+1
-
 
 for episode in range(start, num_iter):
     done = False
@@ -23,7 +23,8 @@ for episode in range(start, num_iter):
     ep_duration = 0
     state = env.reset()
     trajectory = []
-
+    
+    agent.init_hidden()
     while not done:
         action = agent.select_action(state)
         next_state, reward, done = env.step(action)

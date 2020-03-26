@@ -38,16 +38,15 @@ class Brain(nn.Module):
         x = torch.relu(self.conv3(x)).view(state.size(0), 1, -1)
         return torch.cat([x, xR, xC], dim=2)
 
-    def select_action(self, state):
-        self.rnn.flatten_parameters()
+    def select_action(self, state, hidden):
         x = self.extract_features(state)
-        return self.forward(x, self.init_hidden())[0]
+        return self.forward(x, hidden)
     
 
 class Agent():
     
-    def __init__(self, num_actions, eps_start=1.0, eps_end=0.05, eps_decay=0.996,
-                            gamma=0.99, memory_capacity=500, alpha=5e-3, tau=1e-3):
+    def __init__(self, num_actions, eps_start=1.0, eps_end=0.1, eps_decay=0.997,
+                            gamma=0.99, memory_capacity=200, alpha=1e-3, tau=1e-3):
         self.local_Q = Brain(num_actions).to(device)
         self.target_Q = Brain(num_actions).to(device)
         self.target_Q.load_state_dict(self.local_Q.state_dict())
@@ -68,18 +67,21 @@ class Agent():
         self.start = 0
         self.key = "curr"
 
+    def init_hidden(self):
+        self.hidden = self.local_Q.init_hidden().detach()
+
     def select_action(self, state):
         if np.random.random() > self.eps_start:
             with torch.no_grad():
                 obs = torch.tensor(state, device=device, dtype=torch.float).view(1,1,20,10)
-                action = torch.argmax(self.local_Q.select_action(obs)).item()
+                output, self.hidden = self.local_Q.select_action(obs, self.hidden)
+                action = torch.argmax(output).item()
         else:
             action = np.random.randint(self.num_actions)
         return action
 
     def learn(self):
-        for _ in range(8):
-            #episodic_trajectory = random.choice(self.replay_memory)
+        for _ in range(16):
             episodic_trajectory = self.replay_memory.sample()
             loss = 0
             hidden = self.local_Q.init_hidden()
@@ -91,6 +93,7 @@ class Agent():
             cnn_out = self.local_Q.extract_features(cnn_in)
             
             for timestep in range(timesteps-1):
+
                 _, action, reward, done = episodic_trajectory[timestep]
                 state_features = cnn_out[timestep].unsqueeze(0)
                 next_state_features = cnn_out[timestep+1].unsqueeze(0)
@@ -100,11 +103,11 @@ class Agent():
                 next_out = torch.max(next_out, dim=2)[0].squeeze(1)
                 target[:,:,action] = reward + self.gamma * next_out * done
                 loss += self.loss(output, target.detach()).to(device)
+
             self.optimizer.zero_grad()
             loss.backward()
-            #for param in self.local_Q.parameters(): param.grad.data.clamp_(-1, 1)
             self.optimizer.step()
-            # soft update
+
             for target_param, local_param in zip(self.target_Q.parameters(), self.local_Q.parameters()):
                 target_param.data.copy_(self.tau * local_param.data + (1 - self.tau) * target_param.data)
 
@@ -181,10 +184,12 @@ class ReplayMemory:
     def push(self, episodic_trajectory):
         if len(self.memory) < self.capacity:
             self.memory.append(None)
+        """
         else:
             while self.contains_good_reward(self.memory[int(self.position)]):#and np.random.random() < 0.9:
                 self.position = (self.position + 1) % self.capacity
                 print("skipped")
+        """
         self.memory[int(self.position)] = episodic_trajectory
         self.position = (self.position + 1) % self.capacity
 

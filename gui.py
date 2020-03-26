@@ -13,7 +13,7 @@ PIECE_COLOR = "#fff"
 
 class GameGrid():
 
-    def __init__(self, speed=0.08, size=720):
+    def __init__(self, speed=0.03, size=720):
         width = size / 2
         height = size
         self.root = Tk()
@@ -23,10 +23,9 @@ class GameGrid():
         self.env = Environment()
         self.env.reset()
         self.agent = Agent(6)
-        self.agent.load_memory("curr")
-
+        self.agent.load("4300")
+        #self.agent.load_memory("curr")
         self.rewarded_episode = []
-        
         cnt = 0
         for episode in self.agent.replay_memory.memory:
             cnt += 1
@@ -34,7 +33,11 @@ class GameGrid():
                 if reward and reward > 0:
                     print("selected for ", cnt)
                     self.rewarded_episode.append(episode)
-                    
+
+        mx = 0
+        for duration in self.agent.durations:
+            mx = max(mx, duration)
+
         self.speed = speed
         self.size = size
         self.rectangle_size = size/self.env.row
@@ -111,10 +114,7 @@ class GameGrid():
         #self.update()
 
     def watch_history(self):
-        #episode = self.agent.replay_memory.sample()
-
-        #for stacked_state,_,_,_ in self.agent.replay_memory.memory:
-        while True:
+        while not self.quit:
             for episode in reversed(self.rewarded_episode):
                 for state, _, _, _ in episode:
                     #self.board = stacked_state[-1]

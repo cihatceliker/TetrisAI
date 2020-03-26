@@ -6,10 +6,9 @@ import sys
 EMPTY = 0.0
 PIECE = 1.0
 
-REWARD_FUNC = lambda x: x
+CLEAR_REWARD = lambda x: x
 DEATH_REWARD = -1
-DEFAULT_REWARD = 0
-NON_DROP = -1e-4
+NON_DROP = 0
 DROP_CLEAR = 0.2
 
 
@@ -159,7 +158,7 @@ class Environment:
         for idx in reversed(idxs):
             self.board[1:idx+1,:] = self.board[0:idx,:]
         if row_count != 0:
-            self.reward = REWARD_FUNC(row_count)
+            self.reward = CLEAR_REWARD(row_count)
             print("tetris", row_count)
             #os.system("audacious " + "clicksound.wav")
 
