@@ -3,9 +3,9 @@ import threading
 import numpy as np
 import random
 import pickle
-from environment import Environment, INFO_GROUND, INFO_NORMAL
+from environment import Environment
 from tkinter import Frame, Canvas, Tk
-from dqn import Agent, Brain, ReplayMemory
+from dqn import Agent, Brain
 from pyscreenshot import grab
 
 BACKGROUND_COLOR = "#000"
@@ -13,7 +13,7 @@ PIECE_COLOR = "#fff"
 
 class GameGrid():
 
-    def __init__(self, speed=0.01, size=720):
+    def __init__(self, speed=0.08, size=720):
         width = size / 2
         height = size
         self.root = Tk()
@@ -23,13 +23,18 @@ class GameGrid():
         self.env = Environment()
         self.env.reset()
         self.agent = Agent(6)
-        self.agent = pickle.load(open("new_agent99001.tt", "rb"))
-        """
-        for m in self.agent.replay_memory.memory:
-            if m[2] > 0:
-                print(m[2])
-                self.stacked = m[0]
-        """
+        self.agent.load_memory("curr")
+
+        self.rewarded_episode = []
+        
+        cnt = 0
+        for episode in self.agent.replay_memory.memory:
+            cnt += 1
+            for _, _, reward, _ in episode:
+                if reward and reward > 0:
+                    print("selected for ", cnt)
+                    self.rewarded_episode.append(episode)
+                    
         self.speed = speed
         self.size = size
         self.rectangle_size = size/self.env.row
@@ -41,14 +46,14 @@ class GameGrid():
             114: 2, # Right
             53: 3, # Z
             52: 4, # X
-            65: 5 # Drop
+            65: 5, # Drop
+            37: 0 # Do nothing
         }
         self.init()
         self.root.title('Tetris')
         self.root.bind("<Key>", self.key_down)
 
-        #threading.Thread(target=self.watch_history).start()
-        threading.Thread(target=self.watch_play).start()
+        threading.Thread(target=self.watch_history).start()
         #threading.Thread(target=self.play).start()
         self.root.mainloop()
 
@@ -57,31 +62,24 @@ class GameGrid():
         while not self.quit:
             done = False
             state = self.env.reset()
+            trajectory = []
             while not done:
-                stacked_state = [state]
-                actions = []
-                info = INFO_NORMAL
-                print(len(self.agent.replay_memory.memory))
-                while info != INFO_GROUND:
-                    #action = self.agent.select_action(stacked_state)
-                    #action = np.random.randint(num_actions)
-                    if not self.pause:
-                        self.pause = True
-                        state, reward, done, info = self.env.step(self.action)
-
-                        actions.append(self.action)
-                        stacked_state.append(state)
-                        self.board = self.env.board
-                        self.update()
-
-                        self.action = 0
-
-                        time.sleep(self.speed)
+                if not self.pause:
+                    self.pause = True
+                    next_state, reward, done = self.env.step(self.action)
+                    trajectory.append([state, self.action, reward, 1-done])
+                    state = next_state
+                    self.action = 0
+                    self.board = self.env.board
+                    self.update()
+                    time.sleep(self.speed)
                     if self.quit:
                         done = True
-                self.agent.store_experience(stacked_state, actions, reward, 1-done)
 
-        pickle_out = open("asasas.tt","wb")
+            trajectory.append([next_state, None, None, None])
+            self.agent.store_experience(trajectory)
+
+        pickle_out = open("asasas"+str(np.random.random())+".tt","wb")
         pickle.dump(self.agent, pickle_out)
         pickle_out.close()
 
@@ -93,24 +91,6 @@ class GameGrid():
         img.save("ss"+str(self.image_counter)+".png")
         self.image_counter += 1
 
-    def watch_play(self):
-        while not self.quit:
-            state = self.env.reset()
-            done = False
-            while not done:
-                stacked_state = [state]
-                info = INFO_NORMAL
-                while info != INFO_GROUND:
-                    action = self.agent.select_action(stacked_state)
-                    #action = np.random.randint(num_actions)
-                    state, reward, done, info = self.env.step(action)
-                    stacked_state.append(state)
-                    self.board = self.env.board
-                    self.update()
-                    time.sleep(self.speed)
-        print("done")
-        self.root.quit()
-
     def update(self):
         for i in range(self.board.shape[0]):
             for j in range(self.board.shape[1]):
@@ -119,7 +99,6 @@ class GameGrid():
                 color = BACKGROUND_COLOR if curr == 0 else PIECE_COLOR
                 self.game.itemconfig(rect, fill=color)
         #self.take_screenshot()
-            
 
     def key_down(self, event):
         if event.keycode == 24: # q
@@ -132,22 +111,16 @@ class GameGrid():
         #self.update()
 
     def watch_history(self):
-        """
-        for idx in self.idxs:
-            self.stacked_state = self.agent.replay_memory.memory[idx][0]
-            self.board = self.stacked_state[0]
-            for state in self.stacked_state:
-                self.board = state
-                time.sleep(self.speed)
-                self.update()
-        """
+        #episode = self.agent.replay_memory.sample()
+
         #for stacked_state,_,_,_ in self.agent.replay_memory.memory:
         while True:
-            for state in self.stacked:
-                #self.board = stacked_state[-1]
-                self.board = state
-                self.update()
-                time.sleep(self.speed/1)
+            for episode in reversed(self.rewarded_episode):
+                for state, _, _, _ in episode:
+                    #self.board = stacked_state[-1]
+                    self.board = state
+                    self.update()
+                    time.sleep(self.speed)
 
     def init(self):
         def draw(x1, y1, sz, color, func):

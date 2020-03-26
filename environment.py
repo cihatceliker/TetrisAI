@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import random
 import sys
@@ -8,9 +9,9 @@ PIECE = 1.0
 REWARD_FUNC = lambda x: x
 DEATH_REWARD = -1
 DEFAULT_REWARD = 0
+NON_DROP = -1e-4
+DROP_CLEAR = 0.2
 
-INFO_NORMAL = -1
-INFO_GROUND = -2
 
 # ARS rotation
 SHAPES = {
@@ -75,20 +76,30 @@ class Environment:
         self.board = np.ones((self.row, self.col)) * EMPTY
         self.add_new_piece()
         self.done = False
-        return self.board.copy()
+        return self.process_state()
 
     def step(self, action):
         self.reward = 0
-        self.info = ""
         self.actions[action][0](self.actions[action][1])
         if not self._move((1,0)):
             self.check_rows()
             self.add_new_piece()
-            self.info = INFO_GROUND
-        else:
-            self.info = INFO_NORMAL
 
-        return self.board.copy(), self.reward, self.done, self.info
+        if action == 5:
+            if self.reward > 0:
+                print("dropped and cleared")
+                self.reward += DROP_CLEAR
+        else:
+            # tiny negative reward to make it drop asap
+            self.reward += NON_DROP
+
+        return self.process_state(), self.reward, self.done
+
+    def process_state(self):
+        cp = self.board.copy()
+        for x, y in self.current_piece:
+            cp[x+self.rel_x, y+self.rel_y] = -1
+        return cp
 
     def add_new_piece(self, drop_point=(1,5)):
         self.rel_x, self.rel_y = drop_point
@@ -150,6 +161,7 @@ class Environment:
         if row_count != 0:
             self.reward = REWARD_FUNC(row_count)
             print("tetris", row_count)
+            #os.system("audacious " + "clicksound.wav")
 
     def _drop(self, _):
         while self._move((1,0)):

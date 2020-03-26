@@ -1,62 +1,51 @@
-from environment import Environment, INFO_NORMAL, INFO_GROUND
-from dqn import Agent, ReplayMemory, Brain
+from environment import Environment
+from dqn import Agent
 import torch
 import numpy as np
 import math
 import pickle
 
-num_actions = 5
+num_actions = 6
 num_iter = 5000
+print_interval = 10
+save_interval = 100
 
 env = Environment()
-#agent = Agent(num_actions)
-agent = pickle.load(open("new_agent99001.tt", mode="rb"))
-start = agent.start
-agent.eps_start = 0.6
+agent = Agent(num_actions)
+agent.load("2200")
+agent.load_memory("curr")
+start = agent.start+1
 
-total_duration = 0
+
 for episode in range(start, num_iter):
     done = False
     score = 0
     ep_duration = 0
     state = env.reset()
+    trajectory = []
 
     while not done:
-        stacked_state = [state]
-        actions = []
-        info = INFO_NORMAL
-
-        while info != INFO_GROUND:
-            action = agent.select_action(stacked_state)
-            #action = np.random.randint(num_actions)
-            state, reward, done, info = env.step(action)
-
-            actions.append(action)
-            stacked_state.append(state)
-
-            ep_duration += 1
-
-        agent.store_experience(stacked_state, actions, reward, 1-done)
-        agent.learn()
+        action = agent.select_action(state)
+        next_state, reward, done = env.step(action)
+        trajectory.append([state, action, reward, 1-done])
+        state = next_state
         score += reward
+        ep_duration += 1
 
+    trajectory.append([next_state, None, None, done])
+
+    agent.store_experience(trajectory)
+    agent.learn()
     agent.eps_start = max(agent.eps_end, agent.eps_decay * agent.eps_start)
     agent.episodes.append(episode)
     agent.scores.append(score)
     agent.durations.append(ep_duration)
     agent.start = episode
 
-    total_duration += ep_duration
-
-    if episode % 10 == 0:
-
-        avg_score = np.mean(agent.scores[max(0, episode-10):(episode+1)])
-        print("episode: ", episode, "duration:", total_duration,"score: %.6f" % score, \
-            " average score %.3f" % avg_score, "epsilon %.4f"%agent.eps_start)
-        total_duration = 0
-    
-        if episode % 100 == 0:
-            pickle_out = open(str(episode)+".tt","wb")
-            pickle.dump(agent, pickle_out)
-            pickle_out.close()
-    #else: print("episode: ", episode,"duration", ep_duration,"score: %.6f" % score)
+    if episode % print_interval == 0:
+        avg_score = np.mean(agent.scores[max(0, episode-print_interval):(episode+1)])
+        avg_duration = np.mean(agent.durations[max(0, episode-print_interval):(episode+1)])
+        if episode % save_interval == 0:
+            agent.save(str(episode))
+        print("Episode: %d - Avg. Duration: %d - Avg. Score: %.3f - Epsilon %.3f" % 
+                    (episode, avg_duration, avg_score, agent.eps_start))

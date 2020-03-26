@@ -2,7 +2,12 @@
 __pycache__/
 .vscode/
 *.tt
+*.mm
+*.tmp
+*.wav
 irrelevant/
+standart\ gru/
+withdroprew/
 imit.py
 todo.txt
 *.py[cod]
