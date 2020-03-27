@@ -5,13 +5,12 @@ import sys
 
 EMPTY = 0.0
 PIECE = 1.0
-CURRENT = -1.0
 SHADOW = -0.5
 
-CLEAR_REWARD = lambda x: x ** 2
-DEATH_REWARD = -1
+CLEAR_REWARD = lambda x: (x+1) ** 2
+DEATH_REWARD = -2
 NON_DROP = 0#-0.01
-DROP_CLEAR = 0.2
+DROP_CLEAR = 1
 
 
 # ARS rotation
@@ -61,9 +60,9 @@ for n in range(4):
 
 class Environment:
 
-    def __init__(self, row=20, col=10):
-        self.row = row
-        self.col = col
+    def __init__(self):
+        self.row = 20
+        self.col = 10
         self.actions = {
             0: (lambda x: 0, None),
             1: (self._move, (0,-1)),
@@ -75,6 +74,7 @@ class Environment:
 
     def reset(self):
         self.board = np.ones((self.row, self.col)) * EMPTY
+        self.next_piece = np.random.randint(0,7)
         self.add_new_piece()
         self.done = False
         return self.process_state()
@@ -98,33 +98,33 @@ class Environment:
 
     def process_state(self):
         cp = self.board.copy()
-        for x, y in self.current_piece:
-            cp[x+self.rel_x, y+self.rel_y] = CURRENT
-
-        # an ugly code piece to draw shadow of the current piece
+        obs = np.zeros((3,self.row,self.col))
+        for i, j in self.current_piece:
+            cp[i+self.rel_x,j+self.rel_y] = EMPTY
         rel_x = self.rel_x
         while True:
             x, y = rel_x, self.rel_y
-            for i, j in self.current_piece:
-                cp[i+x,j+y] = EMPTY
             if self.is_available(self.current_piece, (1,0), (rel_x, self.rel_y), cp):
                 rel_x += 1
                 x, y = rel_x, self.rel_y
-                for i, j in self.current_piece:
-                    cp[i+x,j+y] = SHADOW
                 continue
             for x, y in self.current_piece:
-                cp[x+rel_x, y+self.rel_y] = SHADOW
-            for x, y in self.current_piece:
-                cp[x+self.rel_x, y+self.rel_y] = PIECE
+                obs[1, x+self.rel_x, y+self.rel_y] = 1
+                obs[2, x+rel_x, y+self.rel_y] = 1
             break
-        return cp
+        for i in range(self.row):
+            for j in range(self.col):
+                num = cp[i,j]
+                if num == PIECE:# and (i, j) not in self.current_piece:
+                    obs[0, i, j] = 1
+        return obs
 
     def add_new_piece(self, drop_point=(1,5)):
-        self.rel_x, self.rel_y = drop_point
         self.rot_index = 0
-        self.cur_index = np.random.randint(0,7)
-        self.current_piece = ALL_SHAPES[self.rot_index][self.cur_index]
+        self.rel_x, self.rel_y = drop_point
+        self.current_piece = ALL_SHAPES[self.rot_index][self.next_piece]
+        self.cur_index = self.next_piece
+        self.next_piece = np.random.randint(0,7)
         if not self.is_available(self.current_piece, (0, 0), (self.rel_x, self.rel_y), self.board):
             self.done = True
             self.reward = DEATH_REWARD

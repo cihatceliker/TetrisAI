@@ -14,22 +14,22 @@ class Brain(nn.Module):
     def __init__(self, out_size):
         super(Brain, self).__init__()
         self.out_size = out_size
-        self.convR = nn.Conv2d(1, 6, kernel_size=(1,10))
-        self.convC = nn.Conv2d(1, 6, kernel_size=(20,1))
-        self.conv1 = nn.Conv2d(1, 6, kernel_size=4)
-        self.conv2 = nn.Conv2d(6, 12, kernel_size=3)
-        self.conv3 = nn.Conv2d(12, 16, kernel_size=3)
-        self.rnn = nn.LSTM(16*39+180, 64, 1)
+        self.convR = nn.Conv2d(3, 16, kernel_size=(1,10))
+        self.convC = nn.Conv2d(3, 16, kernel_size=(20,1))
+        self.conv1 = nn.Conv2d(3, 16, kernel_size=4)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=4)
+        self.conv3 = nn.Conv2d(32, 64, kernel_size=4)
+        self.rnn = nn.LSTM(11*64+480, 256, 1)
         self.dropout = nn.Dropout(0.2)
-        self.out = nn.Linear(64, out_size)
+        self.out = nn.Linear(256, out_size)
 
-    def init_hidden(self, sz=64):
+    def init_hidden(self, sz=256):
         return [torch.zeros((sz), device=device, dtype=torch.float).view(1,1,sz).detach()]*2
 
-    def forward(self, batch):
+    def forward(self, batch, hidden=None):
         self.rnn.flatten_parameters()
         cnn_out = self.extract_features(batch)
-        output, hidden = self.rnn(cnn_out)
+        output, hidden = self.rnn(cnn_out, hidden if hidden else None)
         return self.out(self.dropout(output)), hidden
         
     def extract_features(self, state):
@@ -39,18 +39,12 @@ class Brain(nn.Module):
         x = torch.relu(self.conv2(x))
         x = torch.relu(self.conv3(x)).view(state.size(0), 1, -1)
         return torch.cat([x, xR, xC], dim=2)
-
-    def select_action(self, state, hidden):
-        self.rnn.flatten_parameters()
-        cnn_out = self.extract_features(state)
-        output, hidden = self.rnn(cnn_out, hidden)
-        return self.out(self.dropout(output)), hidden
     
 
 class Agent():
     
     def __init__(self, num_actions, eps_start=1.0, eps_end=0.1, eps_decay=0.995,
-                            gamma=0.99, memory_capacity=500, alpha=2e-3, tau=1e-3):
+                            gamma=0.99, memory_capacity=200, alpha=1e-2, tau=1e-3):
         self.local_Q = Brain(num_actions).to(device)
         self.target_Q = Brain(num_actions).to(device)
         self.target_Q.load_state_dict(self.local_Q.state_dict())
@@ -79,19 +73,20 @@ class Agent():
             # for dropout
             self.local_Q.eval()
             with torch.no_grad():
-                obs = torch.tensor(state, device=device, dtype=torch.float).view(1,1,20,10)
-                output, self.hidden = self.local_Q.select_action(obs, self.hidden)
+                obs = torch.tensor(state, device=device, dtype=torch.float).view(1,3,20,10)
+                output, self.hidden = self.local_Q(obs, self.hidden)
                 action = torch.argmax(output).item()
             self.local_Q.train()
         else:
             action = np.random.randint(self.num_actions)
         return action
 
-    def learn(self):
-        for _ in range(32):
-            batch = list(zip(*self.replay_memory.sample()))
+    def learn(self, batch=None):
+        for _ in range(1):
+            batch = batch if batch else self.replay_memory.sample()
+            batch = list(zip(*batch))
             
-            state_batch = torch.tensor(batch[0], device=device, dtype=torch.float).unsqueeze(1)
+            state_batch = torch.tensor(batch[0], device=device, dtype=torch.float)
             action_batch = torch.tensor(batch[1][:-1], device=device)
             reward_batch = torch.tensor(batch[2][:-1], device=device)
             done_batch = torch.tensor(batch[3][:-1], device=device)
@@ -128,9 +123,14 @@ class Agent():
             "scores": self.scores,
             "episodes": self.episodes,
             "durations": self.durations,
-            "start": self.start
+            "start": self.start,
+            # until size problem is fixed
+            "replay_memory": self.replay_memory,
         }
         pickle.dump(saved, pickle_out)
+        pickle_out.close()
+        # for now
+        return
         global_memory = pickle.load(open("global_memory.mm", mode="rb"))
         if not self.key in global_memory.keys():
             global_memory[self.key] = []
@@ -155,6 +155,7 @@ class Agent():
         self.episodes = info["episodes"]
         self.durations = info["durations"]
         self.start = info["start"]
+        self.replay_memory = info["replay_memory"]
         pickle_in.close()
     
     def load_memory(self, filename, n=None):
@@ -186,12 +187,15 @@ class ReplayMemory:
     def push(self, episodic_trajectory):
         if len(self.memory) < self.capacity:
             self.memory.append(None)
-        """
         else:
-            while self.contains_good_reward(self.memory[int(self.position)]):#and np.random.random() < 0.9:
+            if self.position % self.capacity == 0:
+                self.position = 7
+                "as"
+            #while self.contains_good_reward(self.memory[int(self.position)]):
+            
+            while np.random.random() < 0.1 and self.contains_good_reward(self.memory[int(self.position)]):
                 self.position = (self.position + 1) % self.capacity
-                print("skipped")
-        """
+
         self.memory[int(self.position)] = episodic_trajectory
         self.position = (self.position + 1) % self.capacity
 

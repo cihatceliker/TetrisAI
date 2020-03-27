@@ -6,13 +6,13 @@ import math
 import pickle
 
 num_actions = 6
-num_iter = 5000
+num_iter = 15000
 print_interval = 10
 save_interval = 100
 
 env = Environment()
 agent = Agent(num_actions)
-#agent.load("2600")
+agent.load("7300")
 #agent.load_memory("curr")
 start = agent.start+1
 

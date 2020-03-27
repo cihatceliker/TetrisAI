@@ -3,29 +3,33 @@ import threading
 import numpy as np
 import random
 import pickle
-from environment import Environment, SHADOW
+from environment import Environment, ALL_SHAPES
 from tkinter import Frame, Canvas, Tk
 from dqn import Agent, Brain
 from pyscreenshot import grab
 
-BACKGROUND_COLOR = "#000"
-PIECE_COLOR = "#fff"
+COLORS = {
+    0: "#fff",
+    2: "#3e2175",
+    1: "#c2abed",
+    3: "#5900ff"
+}
 
 class GameGrid():
 
-    def __init__(self, speed=0.03, size=720):
+    def __init__(self, speed=0.01, size=720):
+        self.draw_next_offset = size/4
         width = size / 2
-        height = size
+        height = size + self.draw_next_offset
         self.root = Tk()
-        self.root.configure(background=BACKGROUND_COLOR)
-        self.game = Canvas(self.root, width=width, height=height, bg=BACKGROUND_COLOR)
+        self.root.configure(background=COLORS[0])
+        self.game = Canvas(self.root, width=width, height=height, bg=COLORS[0])
         self.game.pack()
         self.env = Environment()
         self.env.reset()
         self.agent = Agent(6)
-        """
-        self.agent.load("4300")
-        self.agent.load_memory("curr")
+        self.agent.load("saved5500")
+        #self.agent.load_memory("curr")
         self.rewarded_episode = []
         cnt = 0
         for episode in self.agent.replay_memory.memory:
@@ -38,7 +42,6 @@ class GameGrid():
         mx = 0
         for duration in self.agent.durations:
             mx = max(mx, duration)
-        """
 
         self.speed = speed
         self.size = size
@@ -57,37 +60,65 @@ class GameGrid():
         self.init()
         self.root.title('Tetris')
         self.root.bind("<Key>", self.key_down)
-
+        #threading.Thread(target=self.debug_channels).start()
         #threading.Thread(target=self.watch_history).start()
-        threading.Thread(target=self.play).start()
+        #threading.Thread(target=self.play).start()
+        threading.Thread(target=self.watch_play).start()
         self.root.mainloop()
+
+    def process_channels(self, obs):
+        board_repr = np.zeros((20,10))
+        board_repr[obs[2]==1] = 1
+        board_repr[obs[0]==1] = 2
+        board_repr[obs[1]==1] = 3
+        return board_repr
+
+    def debug_channels(self):
+        for episode in reversed(self.rewarded_episode):
+            for obs, _, _, _ in reversed(episode):
+                self.quit = False
+                while not self.quit:
+                    for i in range(3):
+                        self.board = obs[i]
+                        self.update()
+                        time.sleep(self.speed)
+
+    def watch_play(self):
+        self.action = 0
+        while not self.quit:
+            done = False
+            state = self.env.reset()
+            self.agent.init_hidden()
+            while not done:
+                self.action = self.agent.select_action(state)
+                state, reward, done = self.env.step(self.action)
+                self.board = self.process_channels(state)
+                self.update()
+                time.sleep(self.speed)
 
     def play(self):
         self.action = 0
         while not self.quit:
             done = False
             state = self.env.reset()
-            #trajectory = []
+            trajectory = []
             while not done:
                 if not self.pause:
                     self.pause = True
                     next_state, reward, done = self.env.step(self.action)
-                    #trajectory.append([state, self.action, reward, 1-done])
+                    trajectory.append([state, self.action, reward, 1-done])
                     state = next_state
                     self.action = 0
-                    self.board = state
+                    self.board = self.process_channels(state)
                     self.update()
-                    time.sleep(self.speed)
                     if self.quit:
                         done = True
-        """
 
             trajectory.append([next_state, None, None, None])
             self.agent.store_experience(trajectory)
-        pickle_out = open("asasas"+str(np.random.random())+".tt","wb")
+        pickle_out = open("aa.tt","wb")
         pickle.dump(self.agent, pickle_out)
         pickle_out.close()
-        """
 
     def take_screenshot(self):
         # game windows should be on the left bottom corner
@@ -101,13 +132,24 @@ class GameGrid():
         for i in range(self.board.shape[0]):
             for j in range(self.board.shape[1]):
                 rect = self.game_area[i][j]
-                curr = self.board[i, j]
-                color = BACKGROUND_COLOR if curr == 0 else PIECE_COLOR
-                if curr == SHADOW:
-                    color = "blue"
-                    print(curr)
+                curr = int(self.board[i, j])
+                color = COLORS[curr]
                 self.game.itemconfig(rect, fill=color)
-        #self.take_screenshot()
+        rel_x, rel_y = 2, 4
+        next_piece = ALL_SHAPES[0][self.env.next_piece]
+        coords = []
+        for i, j in next_piece:
+            coords.append((i+rel_x, j+rel_y))
+
+        for i in range(len(self.next_piece_rectangles)):
+            for j in range(len(self.next_piece_rectangles[0])):
+                rect = self.next_piece_rectangles[i][j]
+                if (i, j) in coords:
+                    color = COLORS[3]
+                else:
+                    color = "#e5deff"
+                self.game.itemconfig(rect, fill=color)
+            #self.take_screenshot()
 
     def key_down(self, event):
         if event.keycode == 24: # q
@@ -123,25 +165,33 @@ class GameGrid():
         while not self.quit:
             for episode in reversed(self.rewarded_episode):
                 for state, _, _, _ in episode:
-                    #self.board = stacked_state[-1]
-                    self.board = state
+                    self.board = self.process_channels(state)
                     self.update()
                     time.sleep(self.speed)
 
     def init(self):
         def draw(x1, y1, sz, color, func):
             return func(x1, y1, x1+sz, y1+sz, fill=color, width=0)
-        # first draw the game area bg
         self.game_area = []
         for i in range(self.env.row):
             row = []
             for j in range(self.env.col):
-                color = BACKGROUND_COLOR
+                color = COLORS[0]
                 rect = draw(j*self.rectangle_size, i*self.rectangle_size, 
                             self.rectangle_size, color, self.game.create_rectangle)
                 row.append(rect)
             self.game_area.append(row)
 
+        self.next_piece_rectangles = []
+        rect_size = self.draw_next_offset // 4
+        for i in range(8):
+            row = []
+            for j in range(8):
+                color = COLORS[1]
+                rect = draw(j*rect_size, i*rect_size+720, 
+                            rect_size, color, self.game.create_rectangle)
+                row.append(rect)
+            self.next_piece_rectangles.append(row)
 
 if __name__ == "__main__":
     GameGrid()
