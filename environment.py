@@ -5,7 +5,6 @@ import sys
 
 EMPTY = 0.0
 PIECE = 1.0
-SHADOW = -0.5
 
 CLEAR_REWARD = lambda x: (x+1) ** 2
 DEATH_REWARD = -2
@@ -77,15 +76,22 @@ class Environment:
         self.next_piece = np.random.randint(0,7)
         self.add_new_piece()
         self.done = False
-        return self.process_state()
+
+        output = np.zeros((6, self.row, self.col))
+        output[:3] = self.board_to_channels(self.board.copy())
+        output[3:] = self.board_to_channels(self.board.copy())
+        self.previous = output[:3]
+        return output
 
     def step(self, action):
+        self.previous = self.board_to_channels(self.board.copy())
+
         self.reward = 0
         self.actions[action][0](self.actions[action][1])
         if not self._move((1,0)):
             self.check_rows()
             self.add_new_piece()
-
+        
         if action == 5:
             if self.reward > 0:
                 print("dropped and cleared")
@@ -97,14 +103,19 @@ class Environment:
         return self.process_state(), self.reward, self.done
 
     def process_state(self):
-        cp = self.board.copy()
+        output = np.zeros((6, self.row, self.col))
+        output[:3] = self.previous
+        output[3:] = self.board_to_channels(self.board.copy())
+        return output
+    
+    def board_to_channels(self, board):
         obs = np.zeros((3,self.row,self.col))
         for i, j in self.current_piece:
-            cp[i+self.rel_x,j+self.rel_y] = EMPTY
+            board[i+self.rel_x,j+self.rel_y] = EMPTY
         rel_x = self.rel_x
         while True:
             x, y = rel_x, self.rel_y
-            if self.is_available(self.current_piece, (1,0), (rel_x, self.rel_y), cp):
+            if self.is_available(self.current_piece, (1,0), (rel_x, self.rel_y), board):
                 rel_x += 1
                 x, y = rel_x, self.rel_y
                 continue
@@ -112,12 +123,13 @@ class Environment:
                 obs[1, x+self.rel_x, y+self.rel_y] = 1
                 obs[2, x+rel_x, y+self.rel_y] = 1
             break
+        
         for i in range(self.row):
             for j in range(self.col):
-                num = cp[i,j]
-                if num == PIECE:# and (i, j) not in self.current_piece:
+                if board[i,j] == PIECE:
                     obs[0, i, j] = 1
         return obs
+
 
     def add_new_piece(self, drop_point=(1,5)):
         self.rot_index = 0

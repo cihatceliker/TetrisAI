@@ -6,14 +6,14 @@ import math
 import pickle
 
 num_actions = 6
-num_iter = 15000
+num_iter = 50000
 print_interval = 10
 save_interval = 100
 
 env = Environment()
 agent = Agent(num_actions)
-agent.load("7300")
-#agent.load_memory("curr")
+agent.load("14900")
+agent.optimizer = torch.optim.Adam(agent.local_Q.parameters(), 25e-5)
 start = agent.start+1
 
 for episode in range(start, num_iter):
@@ -21,22 +21,17 @@ for episode in range(start, num_iter):
     score = 0
     ep_duration = 0
     state = env.reset()
-    trajectory = []
-    
-    agent.init_hidden()
     
     while not done:
         action = agent.select_action(state)
         next_state, reward, done = env.step(action)
-        trajectory.append([state, action, reward, 1-done])
+        agent.store_experience(state, action, reward, next_state, 1-done)
         state = next_state
         score += reward
         ep_duration += 1
 
-    trajectory.append([next_state, None, None, None])
-
-    agent.store_experience(trajectory)
     agent.learn()
+
     agent.eps_start = max(agent.eps_end, agent.eps_decay * agent.eps_start)
     agent.episodes.append(episode)
     agent.scores.append(score)

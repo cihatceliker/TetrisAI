@@ -9,10 +9,10 @@ from dqn import Agent, Brain
 from pyscreenshot import grab
 
 COLORS = {
-    0: "#fff",
-    2: "#3e2175",
-    1: "#c2abed",
-    3: "#5900ff"
+    0: "#fff",    # BACKGROUND
+    2: "#3e2175", # SHADOW
+    1: "#c2abed", # CURRENT PIECE
+    3: "#5900ff"  # GROUND
 }
 
 class GameGrid():
@@ -28,21 +28,17 @@ class GameGrid():
         self.env = Environment()
         self.env.reset()
         self.agent = Agent(6)
-        self.agent.load("saved5500")
-        #self.agent.load_memory("curr")
-        self.rewarded_episode = []
+        self.agent.load("15000")
         cnt = 0
-        for episode in self.agent.replay_memory.memory:
-            cnt += 1
-            for _, _, reward, _ in episode:
-                if reward and reward > 0:
-                    print("selected for ", cnt)
-                    self.rewarded_episode.append(episode)
-
+        for state, _, reward, _, _ in self.agent.replay_memory.memory:
+            if reward > 0:
+                cnt += 1
+        print(cnt)
         mx = 0
         for duration in self.agent.durations:
             mx = max(mx, duration)
-
+        print(mx)
+        return
         self.speed = speed
         self.size = size
         self.rectangle_size = size/self.env.row
@@ -68,31 +64,29 @@ class GameGrid():
 
     def process_channels(self, obs):
         board_repr = np.zeros((20,10))
+        print(obs.shape)
         board_repr[obs[2]==1] = 1
         board_repr[obs[0]==1] = 2
         board_repr[obs[1]==1] = 3
         return board_repr
 
     def debug_channels(self):
-        for episode in reversed(self.rewarded_episode):
-            for obs, _, _, _ in reversed(episode):
-                self.quit = False
-                while not self.quit:
-                    for i in range(3):
-                        self.board = obs[i]
-                        self.update()
-                        time.sleep(self.speed)
-
+        sample = random.sample(self.agent.replay_memory.memory, 10)
+        for state, _, _, next_state, _ in sample:
+            self.quit = False
+            while not self.quit:
+                self.board = self.process_channels(state[:3])
+                self.update()
+                time.sleep(1)
+                
     def watch_play(self):
-        self.action = 0
         while not self.quit:
             done = False
             state = self.env.reset()
-            self.agent.init_hidden()
             while not done:
-                self.action = self.agent.select_action(state)
-                state, reward, done = self.env.step(self.action)
-                self.board = self.process_channels(state)
+                action = self.agent.select_action(state)
+                state, reward, done = self.env.step(action)
+                self.board = self.process_channels(state[:3])
                 self.update()
                 time.sleep(self.speed)
 
@@ -163,11 +157,15 @@ class GameGrid():
 
     def watch_history(self):
         while not self.quit:
-            for episode in reversed(self.rewarded_episode):
-                for state, _, _, _ in episode:
-                    self.board = self.process_channels(state)
+            asd = True
+            for state, _, _, next_state, _ in self.agent.replay_memory.memory:
+                print(self.process_channels(state[:3]))
+                print(self.process_channels(state[3:]))
+                """
+                    self.board = self.process_channels(next_state[3:])
                     self.update()
-                    time.sleep(self.speed)
+                    time.sleep(1)
+                """
 
     def init(self):
         def draw(x1, y1, sz, color, func):
@@ -192,6 +190,7 @@ class GameGrid():
                             rect_size, color, self.game.create_rectangle)
                 row.append(rect)
             self.next_piece_rectangles.append(row)
+
 
 if __name__ == "__main__":
     GameGrid()
