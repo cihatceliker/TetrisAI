@@ -6,10 +6,9 @@ import sys
 EMPTY = 0.0
 PIECE = 1.0
 
-CLEAR_REWARD = lambda x: (x+1) ** 2
-DEATH_REWARD = -2
-NON_DROP = 0#-0.01
-DROP_CLEAR = 1
+CLEAR_REWARD = lambda x: (x) ** 3
+DEATH_REWARD = -32
+DROP_CLEAR = lambda x: x * 1.2
 
 
 # ARS rotation
@@ -72,6 +71,7 @@ class Environment:
         }
 
     def reset(self):
+        self.reward = 0
         self.board = np.ones((self.row, self.col)) * EMPTY
         self.next_piece = np.random.randint(0,7)
         self.add_new_piece()
@@ -81,7 +81,7 @@ class Environment:
         output[:3] = self.board_to_channels(self.board.copy())
         output[3:] = self.board_to_channels(self.board.copy())
         self.previous = output[:3]
-        return output
+        return output, self.encode_next_piece()
 
     def step(self, action):
         self.previous = self.board_to_channels(self.board.copy())
@@ -92,15 +92,43 @@ class Environment:
             self.check_rows()
             self.add_new_piece()
         
-        if action == 5:
-            if self.reward > 0:
-                print("dropped and cleared")
-                self.reward += DROP_CLEAR
-        else:
-            # tiny negative reward to make it drop asap
-            self.reward += NON_DROP
+        if action == 5 and self.reward > 0:
+            self.reward = DROP_CLEAR(self.reward)
 
-        return self.process_state(), self.reward, self.done
+        return self.process_state(), self.reward, self.done, self.encode_next_piece()
+
+    def encode_next_piece(self):
+        out = np.zeros(7)
+        out[self.next_piece] = 1
+        return out
+
+    def analyze_rows(self, board):
+        highest_filled = 20
+        lowest_unfilled = 0
+        
+        cnt = 0
+        found = False
+        for i in range(self.row-1, 1, -1):
+            for j in range(1,self.col-1):
+                if board[i,j] == EMPTY \
+                    and (board[i, j-1] == PIECE and board[i, j+1] == PIECE
+                        or board[i-1, j] == PIECE):
+                    lowest_unfilled = i
+                    found = True
+                    cnt += 1
+            if found: break
+        if not found:
+            return 0
+
+        found = False
+        for i in range(self.row):
+            for j in range(self.col):
+                if board[i,j] == PIECE:
+                    highest_filled = i
+                    found = True
+            if found: break
+        s = (highest_filled - lowest_unfilled) * cnt
+        return (-s)
 
     def process_state(self):
         output = np.zeros((6, self.row, self.col))
@@ -128,8 +156,10 @@ class Environment:
             for j in range(self.col):
                 if board[i,j] == PIECE:
                     obs[0, i, j] = 1
-        return obs
 
+        s = self.analyze_rows(obs[0])
+        if self.reward <= 0: self.reward += -s
+        return obs
 
     def add_new_piece(self, drop_point=(1,5)):
         self.rot_index = 0
@@ -192,7 +222,6 @@ class Environment:
         if row_count != 0:
             self.reward = CLEAR_REWARD(row_count)
             print("tetris", row_count)
-            #os.system("audacious " + "irrelevant/clicksound.wav")
 
     def _drop(self, _):
         while self._move((1,0)):

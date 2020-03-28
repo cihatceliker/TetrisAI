@@ -17,7 +17,7 @@ COLORS = {
 
 class GameGrid():
 
-    def __init__(self, speed=0.01, size=720):
+    def __init__(self, speed=0.1, size=720):
         self.draw_next_offset = size/4
         width = size / 2
         height = size + self.draw_next_offset
@@ -28,17 +28,17 @@ class GameGrid():
         self.env = Environment()
         self.env.reset()
         self.agent = Agent(6)
-        self.agent.load("15000")
+        self.agent.load("52600")
         cnt = 0
-        for state, _, reward, _, _ in self.agent.replay_memory.memory:
-            if reward > 0:
+        for state, ac, reward, next_state, _, _ in self.agent.replay_memory.memory:
+            if reward > 10:
                 cnt += 1
-        print(cnt)
+                print(reward)
+        print("cnt",cnt)
         mx = 0
         for duration in self.agent.durations:
             mx = max(mx, duration)
         print(mx)
-        return
         self.speed = speed
         self.size = size
         self.rectangle_size = size/self.env.row
@@ -64,7 +64,6 @@ class GameGrid():
 
     def process_channels(self, obs):
         board_repr = np.zeros((20,10))
-        print(obs.shape)
         board_repr[obs[2]==1] = 1
         board_repr[obs[0]==1] = 2
         board_repr[obs[1]==1] = 3
@@ -82,10 +81,10 @@ class GameGrid():
     def watch_play(self):
         while not self.quit:
             done = False
-            state = self.env.reset()
+            state, next_piece = self.env.reset()
             while not done:
-                action = self.agent.select_action(state)
-                state, reward, done = self.env.step(action)
+                action = self.agent.select_action(state, next_piece)
+                state, reward, done, next_piece = self.env.step(action)
                 self.board = self.process_channels(state[:3])
                 self.update()
                 time.sleep(self.speed)
@@ -94,25 +93,19 @@ class GameGrid():
         self.action = 0
         while not self.quit:
             done = False
-            state = self.env.reset()
-            trajectory = []
+            state, next_piece = self.env.reset()
             while not done:
                 if not self.pause:
                     self.pause = True
-                    next_state, reward, done = self.env.step(self.action)
-                    trajectory.append([state, self.action, reward, 1-done])
+                    next_state, reward, done, next_piece = self.env.step(self.action)
+                    self.agent.store_experience(state, self.action, reward, next_state, 1-done, next_piece)
                     state = next_state
                     self.action = 0
-                    self.board = self.process_channels(state)
+                    self.board = self.process_channels(state[3:])
                     self.update()
                     if self.quit:
                         done = True
-
-            trajectory.append([next_state, None, None, None])
-            self.agent.store_experience(trajectory)
-        pickle_out = open("aa.tt","wb")
-        pickle.dump(self.agent, pickle_out)
-        pickle_out.close()
+            self.agent.save(str(np.random.random()))
 
     def take_screenshot(self):
         # game windows should be on the left bottom corner
@@ -157,15 +150,12 @@ class GameGrid():
 
     def watch_history(self):
         while not self.quit:
-            asd = True
-            for state, _, _, next_state, _ in self.agent.replay_memory.memory:
-                print(self.process_channels(state[:3]))
-                print(self.process_channels(state[3:]))
-                """
-                    self.board = self.process_channels(next_state[3:])
-                    self.update()
-                    time.sleep(1)
-                """
+            self.board = self.process_channels(self.play_it[:3])
+            self.update()
+            time.sleep(self.speed)
+            self.board = self.process_channels(self.play_it[3:])
+            self.update()
+            time.sleep(self.speed)
 
     def init(self):
         def draw(x1, y1, sz, color, func):
