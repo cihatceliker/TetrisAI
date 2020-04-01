@@ -7,6 +7,7 @@ from environment import Environment, ALL_SHAPES
 from tkinter import Frame, Canvas, Tk
 from dqn import Agent, Brain
 from pyscreenshot import grab
+import sys
 
 COLORS = {
     0: "#fff",    # BACKGROUND
@@ -17,7 +18,7 @@ COLORS = {
 
 class GameGrid():
 
-    def __init__(self, speed=0.1, size=720):
+    def __init__(self, speed=0.01, size=720):
         self.draw_next_offset = size/4
         width = size / 2
         height = size + self.draw_next_offset
@@ -28,17 +29,14 @@ class GameGrid():
         self.env = Environment()
         self.env.reset()
         self.agent = Agent(6)
-        self.agent.load("52600")
+        self.agent.load(sys.argv[1])
+
         cnt = 0
-        for state, ac, reward, next_state, _, _ in self.agent.replay_memory.memory:
-            if reward > 10:
+        for m in self.agent.replay_memory.memory:
+            if m[2] > 1:
                 cnt += 1
-                print(reward)
+                self.play_it = m[3]
         print("cnt",cnt)
-        mx = 0
-        for duration in self.agent.durations:
-            mx = max(mx, duration)
-        print(mx)
         self.speed = speed
         self.size = size
         self.rectangle_size = size/self.env.row
@@ -64,20 +62,24 @@ class GameGrid():
 
     def process_channels(self, obs):
         board_repr = np.zeros((20,10))
-        board_repr[obs[2]==1] = 1
-        board_repr[obs[0]==1] = 2
-        board_repr[obs[1]==1] = 3
+        board_repr[obs[2]==1] = 2
+        board_repr[obs[1]==1] = 1
+        board_repr[obs[0]==1] = 3
         return board_repr
 
     def debug_channels(self):
-        sample = random.sample(self.agent.replay_memory.memory, 10)
-        for state, _, _, next_state, _ in sample:
+        sample = random.sample(self.agent.replay_memory.memory, 1)
+        for state, _, _, next_state, _, _ in sample:
             self.quit = False
             while not self.quit:
-                self.board = self.process_channels(state[:3])
-                self.update()
-                time.sleep(1)
-                
+                for j in range(2):
+                    for i in range(4):
+                        #self.board = self.process_channels(state[i])
+                        self.board = next_state[i+j*4]
+                        self.update()
+                        time.sleep(1)
+            self.quit = True
+            
     def watch_play(self):
         while not self.quit:
             done = False
@@ -150,12 +152,9 @@ class GameGrid():
 
     def watch_history(self):
         while not self.quit:
-            self.board = self.process_channels(self.play_it[:3])
+            self.board = self.process_channels(self.play_it[4:])
             self.update()
-            time.sleep(self.speed)
-            self.board = self.process_channels(self.play_it[3:])
-            self.update()
-            time.sleep(self.speed)
+            time.sleep(1)
 
     def init(self):
         def draw(x1, y1, sz, color, func):

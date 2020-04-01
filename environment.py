@@ -6,8 +6,8 @@ import sys
 EMPTY = 0.0
 PIECE = 1.0
 
-CLEAR_REWARD = lambda x: (x) ** 3
-DEATH_REWARD = -32
+#CLEAR_REWARD = lambda x: x * 4
+DEATH_REWARD = -256
 DROP_CLEAR = lambda x: x * 1.2
 
 
@@ -62,82 +62,85 @@ class Environment:
         self.row = 20
         self.col = 10
         self.actions = {
-            0: (lambda x: 0, None),
+            0: (lambda x: 0, None), # do nothing
             1: (self._move, (0,-1)),
             2: (self._move, (0,1)),
-            3: (self._rotate, False), 
+            3: (self._rotate, False),
             4: (self._rotate, True),
             5: (self._drop, None)
         }
 
     def reset(self):
-        self.reward = 0
         self.board = np.ones((self.row, self.col)) * EMPTY
         self.next_piece = np.random.randint(0,7)
         self.add_new_piece()
+        self.previous_score = 0
         self.done = False
-
-        output = np.zeros((6, self.row, self.col))
-        output[:3] = self.board_to_channels(self.board.copy())
-        output[3:] = self.board_to_channels(self.board.copy())
-        self.previous = output[:3]
-        return output, self.encode_next_piece()
+        self.previous = self.board_to_channels(self.board.copy())
+        return self.process_state(), self.encode_next_piece()
 
     def step(self, action):
-        self.previous = self.board_to_channels(self.board.copy())
-
-        self.reward = 0
         self.actions[action][0](self.actions[action][1])
+        
+        score = self.check_rows(self.board.copy())
+        
         if not self._move((1,0)):
-            self.check_rows()
+            score += self.check_complete_lines() * 0.76
             self.add_new_piece()
         
-        if action == 5 and self.reward > 0:
-            self.reward = DROP_CLEAR(self.reward)
-
-        return self.process_state(), self.reward, self.done, self.encode_next_piece()
-
-    def encode_next_piece(self):
-        out = np.zeros(7)
-        out[self.next_piece] = 1
-        return out
-
-    def analyze_rows(self, board):
-        highest_filled = 20
-        lowest_unfilled = 0
+        reward = score# - self.previous_score
+        #self.previous_score = score
         
-        cnt = 0
-        found = False
-        for i in range(self.row-1, 1, -1):
-            for j in range(1,self.col-1):
-                if board[i,j] == EMPTY \
-                    and (board[i, j-1] == PIECE and board[i, j+1] == PIECE
-                        or board[i-1, j] == PIECE):
-                    lowest_unfilled = i
-                    found = True
-                    cnt += 1
-            if found: break
-        if not found:
-            return 0
+        if action == 5 and reward > 0: reward = DROP_CLEAR(reward)
 
-        found = False
-        for i in range(self.row):
-            for j in range(self.col):
-                if board[i,j] == PIECE:
-                    highest_filled = i
-                    found = True
-            if found: break
-        s = (highest_filled - lowest_unfilled) * cnt
-        return (-s)
+        return self.process_state(), reward, self.done, self.encode_next_piece()
 
     def process_state(self):
-        output = np.zeros((6, self.row, self.col))
-        output[:3] = self.previous
-        output[3:] = self.board_to_channels(self.board.copy())
+        #return self.board_to_channels(self.board.copy())
+        output = np.zeros((8, self.row, self.col))
+        output[:4] = self.board_to_channels(self.board.copy())
+        output[4:] = self.previous
+        self.previous = output[:4]
         return output
-    
+
+    def check_complete_lines(self):
+        idxs = []
+        for i in range(self.row-1, 0, -1):
+            if not EMPTY in self.board[i,:]:
+                idxs.append(i)
+        complete_lines = len(idxs)
+        for idx in reversed(idxs):
+            self.board[1:idx+1,:] = self.board[0:idx,:]
+        if complete_lines != 0: print("tetris", complete_lines)
+        return complete_lines
+
+    def check_rows(self, board):
+        for i, j in self.current_piece:
+            board[i+self.rel_x,j+self.rel_y] = EMPTY
+
+        aggregate_height = 0
+        holes = 0
+        bumpiness = 0
+        heights = np.zeros(self.col)
+        for j in range(self.col):
+            for i in range(self.row-1,0,-1):
+                if board[i,j] == PIECE:
+                    heights[j] = self.row - i
+                    break
+        aggregate_height = sum(heights)
+        for i in range(self.col-1):
+            bumpiness += abs(heights[i]-heights[i+1])
+        for j in range(self.col):
+            piece_found = False
+            for i in range(self.row):
+                if board[i,j] == PIECE:
+                    piece_found = True
+                if piece_found and board[i,j] == EMPTY:
+                    holes += 1
+        return aggregate_height * -0.51 + holes * -0.35 + bumpiness * -0.18
+
     def board_to_channels(self, board):
-        obs = np.zeros((3,self.row,self.col))
+        obs = np.zeros((4,self.row,self.col))
         for i, j in self.current_piece:
             board[i+self.rel_x,j+self.rel_y] = EMPTY
         rel_x = self.rel_x
@@ -148,18 +151,21 @@ class Environment:
                 x, y = rel_x, self.rel_y
                 continue
             for x, y in self.current_piece:
-                obs[1, x+self.rel_x, y+self.rel_y] = 1
-                obs[2, x+rel_x, y+self.rel_y] = 1
+                obs[0, x+self.rel_x, y+self.rel_y] = 1
+                obs[1, x+rel_x, y+self.rel_y] = 1
             break
-        
         for i in range(self.row):
             for j in range(self.col):
                 if board[i,j] == PIECE:
-                    obs[0, i, j] = 1
-
-        s = self.analyze_rows(obs[0])
-        if self.reward <= 0: self.reward += -s
+                    obs[2, i, j] = 1
+                else:
+                    obs[3, i, j] = 1
         return obs
+
+    def encode_next_piece(self):
+        out = np.zeros(7)
+        out[self.next_piece] = 1
+        return out
 
     def add_new_piece(self, drop_point=(1,5)):
         self.rot_index = 0
@@ -209,19 +215,6 @@ class Environment:
             return True
         self._set(num=PIECE)
         return False
-
-    def check_rows(self):
-        row_count = 0
-        idxs = []
-        for i in range(self.row-1, 0, -1):
-            if not EMPTY in self.board[i,:]:
-                idxs.append(i)
-        row_count = len(idxs)
-        for idx in reversed(idxs):
-            self.board[1:idx+1,:] = self.board[0:idx,:]
-        if row_count != 0:
-            self.reward = CLEAR_REWARD(row_count)
-            print("tetris", row_count)
 
     def _drop(self, _):
         while self._move((1,0)):

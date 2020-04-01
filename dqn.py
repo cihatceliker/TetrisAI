@@ -9,77 +9,40 @@ import pickle
 
 device = torch.device("cuda")
 
+
 class Brain(nn.Module):
 
     def __init__(self, out_size):
         super(Brain, self).__init__()
-        self.out_size = out_size
-        self.conv0R = nn.Conv2d(6, 32, kernel_size=(1,10))
-        self.conv0C = nn.Conv2d(6, 32, kernel_size=(20,1))
-        self.conv1_1 = nn.Conv2d(6, 32, kernel_size=5, padding=2)
-        self.conv1_2 = nn.Conv2d(32, 32, kernel_size=3, padding=1)
-        self.conv1_3 = nn.Conv2d(32, 32, kernel_size=1)
-        self.conv1_4 = nn.Conv2d(32, 32, kernel_size=3, padding=1)
-        self.conv1R = nn.Conv2d(32, 32, kernel_size=(1,5))
-        self.conv1C = nn.Conv2d(32, 32, kernel_size=(10,1))
-        
-        self.conv2_1 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
-        self.conv2_2 = nn.Conv2d(64, 32, kernel_size=1)
-        self.conv2_3 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
-        self.conv2R = nn.Conv2d(64, 32, kernel_size=(1,2))
-        self.conv2C = nn.Conv2d(64, 32, kernel_size=(5,1))
-        
-        self.conv3_1 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        self.conv3_2 = nn.Conv2d(128, 64, kernel_size=1)
-        self.conv3_3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-
-        self.fc1 = nn.Linear(4167, 256)
-        self.fc2 = nn.Linear(256, 256)
+        in_channels = 8
+        self.conv_row = nn.Conv2d(in_channels, 32, (1, 10))
+        self.conv1 = nn.Conv2d(in_channels, 32, 5)
+        self.conv2 = nn.Conv2d(32, 48, 3)
+        self.conv3 = nn.Conv2d(48, 64, 3)
+        self.fc1 = nn.Linear(2183, 256)
         self.out = nn.Linear(256, out_size)
 
-
     def forward(self, state, next_piece):
-        xR = torch.relu(self.conv0R(state)).view(state.size(0), 1, -1)
-        xC = torch.relu(self.conv0C(state)).view(state.size(0), 1, -1)
-        x1 = torch.relu(self.conv1_1(state))
-        x1 = torch.relu(self.conv1_2(x1))
-        x1 = torch.relu(self.conv1_3(x1))
-        x1 = torch.relu(self.conv1_4(x1))
-        x1 = torch.max_pool2d(x1, 2)
-        x1R = torch.relu(self.conv1R(x1)).view(state.size(0), 1, -1)
-        x1C = torch.relu(self.conv1C(x1)).view(state.size(0), 1, -1)
-        x2 = torch.relu(self.conv2_1(x1))
-        x2 = torch.relu(self.conv2_2(x2))
-        x2 = torch.relu(self.conv2_3(x2))
-        x2 = torch.max_pool2d(x2, 2)
-        x2R = torch.relu(self.conv2R(x2)).view(state.size(0), 1, -1)
-        x2C = torch.relu(self.conv2C(x2)).view(state.size(0), 1, -1)
-        x3 = torch.relu(self.conv3_1(x2))
-        x3 = torch.relu(self.conv3_2(x3))
-        x3 = torch.relu(self.conv3_3(x3))
-        x3 = torch.max_pool2d(x3, 2)
+        row = torch.relu(self.conv_row(state)).view(state.size(0), 1, -1)
+        x = torch.relu(self.conv1(state))
+        x = torch.relu(self.conv2(x))
+        x = torch.relu(self.conv3(x)).view(state.size(0), 1, -1)
         x = torch.cat([
-            xR, xC, x1R, x1C, x2R, x2C,
-            x1.view(state.size(0), 1, -1),
-            x2.view(state.size(0), 1, -1),
-            x3.view(state.size(0), 1, -1),
-            next_piece
+            next_piece, row, x
         ], dim=2)
         x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
         return self.out(x)
 
 
 class Agent():
     
-    def __init__(self, num_actions, eps_start=1.0, eps_end=0.05, eps_decay=0.996,
-                            gamma=0.99, memory_capacity=20000, batch_size=256, alpha=5e-4, tau=1e-3):
+    def __init__(self, num_actions, eps_start=1.0, eps_end=0.05, eps_decay=0.995,
+                            gamma=0.99999, memory_capacity=10000, batch_size=128, alpha=4e-3, tau=1e-3):
         self.local_Q = Brain(num_actions).to(device)
         self.target_Q = Brain(num_actions).to(device)
         self.target_Q.load_state_dict(self.local_Q.state_dict())
         self.target_Q.eval()
         self.optimizer = optim.Adam(self.local_Q.parameters(), lr=alpha)
-        #self.loss = nn.SmoothL1Loss()
         self.loss = nn.MSELoss()
         self.num_actions = num_actions
         self.eps_start = eps_start
@@ -93,16 +56,16 @@ class Agent():
         self.scores = []
         self.episodes = []
         self.durations = []
-        self.start = 0
+        self.start = 1
 
     def select_action(self, state, next_piece):
         if np.random.random() > self.eps_start:
-            #self.local_Q.eval()
+            self.local_Q.eval()
             with torch.no_grad():
-                obs = torch.tensor(state, device=device, dtype=torch.float).view(1,6,20,10)
+                obs = torch.tensor(state, device=device, dtype=torch.float).unsqueeze(0)
                 next_piece = torch.tensor(next_piece, device=device, dtype=torch.float).view(1,1,7)
                 action = torch.argmax(self.local_Q(obs, next_piece)).item()
-            #self.local_Q.train()
+            self.local_Q.train()
         else:
             action = np.random.randint(self.num_actions)
         return action
@@ -186,17 +149,13 @@ class ReplayMemory:
         if len(self.memory) < self.capacity:
             self.memory.append(None)
         else:
-            if self.position == 0:
-                self.position = 4000
-            #if self.memory[int(self.position)][2] > 0 or \
-            if self.memory[int(self.position)][2] > 8 or \
-                (self.memory[int(self.position)][2] < -30 and np.random.random() < 0.5):# or \
-                #(self.memory[int(self.position)][2] > 0 and np.random.random() < 0.5):
-
+            reward = self.memory[int(self.position)][2]
+            rnd = np.random.random()
+            #if reward > 0 or (reward != 0 and rnd < 0.9):
+            if (reward > 0 and rnd < 0.99):
                 self.position = (self.position + 1) % self.capacity
                 self.push(args)
                 return
-
         self.memory[int(self.position)] = args
         self.position = (self.position + 1) % self.capacity
 
