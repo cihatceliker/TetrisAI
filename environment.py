@@ -7,9 +7,8 @@ EMPTY = 0.0
 PIECE = 1.0
 
 #CLEAR_REWARD = lambda x: x * 4
-DEATH_REWARD = -256
+DEATH_REWARD = -4
 DROP_CLEAR = lambda x: x * 1.2
-
 
 # ARS rotation
 SHAPES = {
@@ -81,17 +80,17 @@ class Environment:
 
     def step(self, action):
         self.actions[action][0](self.actions[action][1])
-        
+
         score = self.check_rows(self.board.copy())
         
         if not self._move((1,0)):
             score += self.check_complete_lines() * 0.76
             self.add_new_piece()
+        reward = score - self.previous_score
+        self.previous_score = score
         
-        reward = score# - self.previous_score
-        #self.previous_score = score
-        
-        if action == 5 and reward > 0: reward = DROP_CLEAR(reward)
+        if action == 5: # and reward > 0:
+            reward = DROP_CLEAR(reward)
 
         return self.process_state(), reward, self.done, self.encode_next_piece()
 
@@ -183,10 +182,8 @@ class Environment:
         x, y = to
         k, l = relative
         for i, j in shape:
-            # out of bounds
             if i+x+k >= self.row or j+y+l < 0 or j+y+l >= self.col:
                 return False
-            # is the tile occupied by others
             if board[i+x+k, j+y+l] == PIECE:
                 return False
         return True

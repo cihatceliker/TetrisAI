@@ -5,8 +5,7 @@ import random
 import pickle
 from environment import Environment, ALL_SHAPES
 from tkinter import Frame, Canvas, Tk
-from dqn import Agent, Brain
-from pyscreenshot import grab
+from dqn import Agent
 import sys
 
 COLORS = {
@@ -30,13 +29,15 @@ class GameGrid():
         self.env.reset()
         self.agent = Agent(6)
         self.agent.load(sys.argv[1])
-
+        print(max(self.agent.durations))
         cnt = 0
+        
         for m in self.agent.replay_memory.memory:
             if m[2] > 1:
                 cnt += 1
                 self.play_it = m[3]
         print("cnt",cnt)
+        
         self.speed = speed
         self.size = size
         self.rectangle_size = size/self.env.row
@@ -100,14 +101,14 @@ class GameGrid():
                 if not self.pause:
                     self.pause = True
                     next_state, reward, done, next_piece = self.env.step(self.action)
-                    self.agent.store_experience(state, self.action, reward, next_state, 1-done, next_piece)
+                    #self.agent.store_experience(state, self.action, reward, next_state, 1-done, next_piece)
                     state = next_state
                     self.action = 0
-                    self.board = self.process_channels(state[3:])
+                    self.board = self.process_channels(state[:4])
                     self.update()
                     if self.quit:
                         done = True
-            self.agent.save(str(np.random.random()))
+        self.agent.save(str(np.random.random()))
 
     def take_screenshot(self):
         # game windows should be on the left bottom corner
