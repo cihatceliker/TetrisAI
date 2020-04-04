@@ -5,7 +5,7 @@ import random
 import pickle
 from environment import Environment, ALL_SHAPES
 from tkinter import Frame, Canvas, Tk
-from dqn import Agent
+from agent import Agent, load_agent
 import sys
 
 COLORS = {
@@ -27,17 +27,14 @@ class GameGrid():
         self.game.pack()
         self.env = Environment()
         self.env.reset()
-        self.agent = Agent(6)
-        self.agent.load(sys.argv[1])
+        self.agent = load_agent(sys.argv[1])
         print(max(self.agent.durations))
         cnt = 0
-        
+        rewards = []
         for m in self.agent.replay_memory.memory:
-            if m[2] > 1:
-                cnt += 1
-                self.play_it = m[3]
-        print("cnt",cnt)
-        
+            rewards.append(m[3])
+        print(min(rewards))        
+        print(max(rewards))        
         self.speed = speed
         self.size = size
         self.rectangle_size = size/self.env.row

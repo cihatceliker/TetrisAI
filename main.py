@@ -1,5 +1,5 @@
 from environment import Environment
-from dqn import Agent
+from agent import Agent, load_agent
 import torch
 import numpy as np
 import math
@@ -12,8 +12,8 @@ print_interval = 10
 save_interval = 200
 
 env = Environment()
-agent = Agent(num_actions)
-#agent.load(sys.argv[1])
+agent = Agent(num_actions) if len(sys.argv) == 1 else agent.load(sys.argv[1])    
+
 #agent.optimizer = torch.optim.Adam(agent.local_Q.parameters(), 5e-4)
 #print(agent.optimizer)
 def count(val):

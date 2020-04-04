@@ -7,7 +7,7 @@ EMPTY = 0.0
 PIECE = 1.0
 
 #CLEAR_REWARD = lambda x: x * 4
-DEATH_REWARD = -4
+DEATH_REWARD = -64
 DROP_CLEAR = lambda x: x * 1.2
 
 # ARS rotation
@@ -79,29 +79,32 @@ class Environment:
         return self.process_state(), self.encode_next_piece()
 
     def step(self, action):
+        self.reward = 0
         self.actions[action][0](self.actions[action][1])
 
         score = self.check_rows(self.board.copy())
-        
         if not self._move((1,0)):
             score += self.check_complete_lines() * 0.76
             self.add_new_piece()
-        reward = score - self.previous_score
+
+        self.reward += score - self.previous_score
         self.previous_score = score
         
         if action == 5: # and reward > 0:
-            reward = DROP_CLEAR(reward)
+            self.reward = DROP_CLEAR(self.reward)
 
-        return self.process_state(), reward, self.done, self.encode_next_piece()
+        return self.process_state(), self.reward, self.done, self.encode_next_piece()
 
     def process_state(self):
-        #return self.board_to_channels(self.board.copy())
-        output = np.zeros((8, self.row, self.col))
-        output[:4] = self.board_to_channels(self.board.copy())
-        output[4:] = self.previous
-        self.previous = output[:4]
-        return output
-
+        return self.board_to_channels(self.board.copy())
+        """
+            output = np.zeros((8, self.row, self.col))
+            output[:4] = self.board_to_channels(self.board.copy())
+            output[4:] = self.previous
+            self.previous = output[:4]
+            return output
+        """
+        
     def check_complete_lines(self):
         idxs = []
         for i in range(self.row-1, 0, -1):
@@ -116,7 +119,6 @@ class Environment:
     def check_rows(self, board):
         for i, j in self.current_piece:
             board[i+self.rel_x,j+self.rel_y] = EMPTY
-
         aggregate_height = 0
         holes = 0
         bumpiness = 0
