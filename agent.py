@@ -7,7 +7,7 @@ import math
 import pickle
 import sys
 
-device = torch.device("cpu")
+device = torch.device("cuda")
 
 
 class Network(nn.Module):
@@ -15,15 +15,13 @@ class Network(nn.Module):
     def __init__(self, n_actions):
         super(Network, self).__init__()
         self.conv = CNN(n_actions)
-        self.fc1 = nn.Linear(1351, 64)
-        self.fc2 = nn.Linear(64, 64)
-        self.out = nn.Linear(64, n_actions)
+        self.fc1 = nn.Linear(1447, 256)
+        self.out = nn.Linear(256, n_actions)
         self.to(device)
 
     def forward(self, state, next_piece):
         features = self.conv(state)
         x = torch.relu(self.fc1(torch.cat([features, next_piece], dim=2)))
-        x = torch.relu(self.fc2(x))
         return self.out(x)
 
 
@@ -31,39 +29,34 @@ class CNN(nn.Module):
 
     def __init__(self, out_size):
         super(CNN, self).__init__()
-        in_channels = 4
-        def create_block(in_, out_, sz):
-            return nn.Sequential(
-                nn.Conv2d(in_, out_, sz),
-                nn.MaxPool2d(2),
-                nn.ReLU()
-            )
-        self.conv_row = nn.Conv2d(in_channels, 16, (1, 10))
-        self.conv_col = nn.Conv2d(in_channels, 16, (20, 1))
-        self.conv_initial = nn.Conv2d(in_channels, 16, 5, padding=2)
-        self.block1 = create_block(16, 24, 3)
+        in_channels = 8
+        self.convR = nn.Conv2d(in_channels, 8, (20,1))
+        self.convC = nn.Conv2d(in_channels, 8, (1,10))
+        self.conv1 = nn.Conv2d(in_channels, 16, 5, padding=2),
+        self.block1 = nn.Sequential(
+            nn.Conv2d(16, 24, 3, padding=1),
+            nn.MaxPool2d(2),
+            nn.ReLU(),
+        )
 
     def forward(self, state):
-        row = torch.relu(self.conv_row(state)).view(state.size(0), 1, -1)
-        col = torch.relu(self.conv_col(state)).view(state.size(0), 1, -1)
-        x = torch.relu(self.conv_initial(state))
-        x_skip = self.block1(x)
-        return torch.cat([
-            row, col,
-            x_skip.view(state.size(0), 1, -1)
-        ], dim=2)
+        xR = torch.relu(self.convR(state)).view(state.size(0), 1, -1)
+        xC = torch.relu(self.convC(state)).view(state.size(0), 1, -1)
+        x = torch.relu(self.conv1(state))
+        x = self.block1(x).view(state.size(0), 1, -1)
+        return torch.cat([xR, xC, x], dim=2)
 
 
 class Agent():
     
     def __init__(self, num_actions, eps_start=1.0, eps_end=0.03, eps_decay=0.996,
-                            gamma=0.992, memory_capacity=20000, batch_size=128, alpha=25e-5, tau=1e-3):
+                            gamma=0.992, memory_capacity=20000, batch_size=128, alpha=10e-4, tau=1e-3):
         self.local_Q = Network(num_actions).to(device)
         self.target_Q = Network(num_actions).to(device)
         self.target_Q.load_state_dict(self.local_Q.state_dict())
         self.target_Q.eval()
         self.optimizer = optim.Adam(self.local_Q.parameters(), lr=alpha)
-        self.loss = nn.MSELoss()
+        self.loss = nn.SmoothL1Loss()
         self.num_actions = num_actions
         self.eps_start = eps_start
         self.eps_end = eps_end
@@ -101,9 +94,7 @@ class Agent():
         state_batch, next_piece_batch, action_batch, reward_batch, next_state_batch, next_next_piece_batch, done_batch = \
             self.replay_memory.sample(self.batch_size)
         
-        next_selected_actions = self.local_Q(next_state_batch, next_next_piece_batch)
-        max_actions = torch.argmax(next_selected_actions, dim=2).squeeze(1)
-
+        max_actions = torch.argmax(self.local_Q(next_state_batch, next_next_piece_batch), dim=2).squeeze(1)
         prediction = self.local_Q(state_batch, next_piece_batch)[self.indexes,0,action_batch]
 
         with torch.no_grad():
@@ -143,15 +134,13 @@ class ReplayMemory:
         if len(self.memory) < self.capacity:
             self.memory.append(None)
         else:
+            reward = self.memory[int(self.position)][2]
+            rnd = np.random.random()
+            if (reward > 0 and rnd < 0.96) or (reward < 0 and rnd < 0.7):
+                self.position = (self.position + 1) % self.capacity
+                self.push(args)
+                return
             """
-                reward = self.memory[int(self.position)][2]
-                rnd = np.random.random()
-                #if reward > 0 or (reward != 0 and rnd < 0.9):
-                if reward > 1 and rnd < 0.95:
-                    self.position = (self.position + 1) % self.capacity
-                    print("skipped")
-                    self.push(args)
-                    return
             """
         self.memory[int(self.position)] = args
         self.position = (self.position + 1) % self.capacity

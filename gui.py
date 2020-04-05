@@ -28,13 +28,17 @@ class GameGrid():
         self.env = Environment()
         self.env.reset()
         self.agent = load_agent(sys.argv[1])
-        print(max(self.agent.durations))
         cnt = 0
         rewards = []
         for m in self.agent.replay_memory.memory:
             rewards.append(m[3])
-        print(min(rewards))        
-        print(max(rewards))        
+        
+        idx = np.argmax(rewards)
+        print(self.agent.replay_memory.memory[idx][0][2])
+        print(self.agent.replay_memory.memory[idx][4][2])
+        print(max(self.agent.durations))
+        print(min(rewards))
+        print(max(rewards))
         self.speed = speed
         self.size = size
         self.rectangle_size = size/self.env.row

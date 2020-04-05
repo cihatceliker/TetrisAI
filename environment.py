@@ -7,8 +7,8 @@ EMPTY = 0.0
 PIECE = 1.0
 
 #CLEAR_REWARD = lambda x: x * 4
-DEATH_REWARD = -64
-DROP_CLEAR = lambda x: x * 1.2
+DEATH_REWARD = -2
+DROP_CLEAR = lambda x: x * 4
 
 # ARS rotation
 SHAPES = {
@@ -82,29 +82,32 @@ class Environment:
         self.reward = 0
         self.actions[action][0](self.actions[action][1])
 
-        score = self.check_rows(self.board.copy())
+        score = 0
         if not self._move((1,0)):
-            score += self.check_complete_lines() * 0.76
+            score += self.check_complete_lines() * 2.76
             self.add_new_piece()
-
-        self.reward += score - self.previous_score
-        self.previous_score = score
+            
+            score += self.check_rows(self.board.copy())
+            self.reward += score - self.previous_score
+            self.previous_score = score
         
-        if action == 5: # and reward > 0:
+        if action == 5:
             self.reward = DROP_CLEAR(self.reward)
+        
+        if self.reward < 0:
+            self.reward = -((-self.reward)**0.5)
+        else: self.reward = self.reward**0.5
 
         return self.process_state(), self.reward, self.done, self.encode_next_piece()
 
     def process_state(self):
-        return self.board_to_channels(self.board.copy())
-        """
-            output = np.zeros((8, self.row, self.col))
-            output[:4] = self.board_to_channels(self.board.copy())
-            output[4:] = self.previous
-            self.previous = output[:4]
-            return output
-        """
-        
+        #return self.board_to_channels(self.board.copy())
+        output = np.zeros((8, self.row, self.col))
+        output[:4] = self.board_to_channels(self.board.copy())
+        output[4:] = self.previous
+        self.previous = output[:4]
+        return output
+    #(highest filled block) - (lowest unfilled block)
     def check_complete_lines(self):
         idxs = []
         for i in range(self.row-1, 0, -1):
@@ -113,7 +116,7 @@ class Environment:
         complete_lines = len(idxs)
         for idx in reversed(idxs):
             self.board[1:idx+1,:] = self.board[0:idx,:]
-        if complete_lines != 0: print("tetris", complete_lines)
+        if complete_lines > 0: print("tetris", complete_lines)
         return complete_lines
 
     def check_rows(self, board):
@@ -129,16 +132,43 @@ class Environment:
                     heights[j] = self.row - i
                     break
         aggregate_height = sum(heights)
-        for i in range(self.col-1):
-            bumpiness += abs(heights[i]-heights[i+1])
         for j in range(self.col):
             piece_found = False
+            if j < self.col-1:
+                bumpiness += abs(heights[j]-heights[j+1])
             for i in range(self.row):
                 if board[i,j] == PIECE:
                     piece_found = True
                 if piece_found and board[i,j] == EMPTY:
                     holes += 1
         return aggregate_height * -0.51 + holes * -0.35 + bumpiness * -0.18
+
+        """
+
+            def check_rows(self, board):
+                for i, j in self.current_piece:
+                    board[i+self.rel_x,j+self.rel_y] = EMPTY
+                heights = []
+                for j in range(self.col):
+                    for i in range(self.row-1,0,-1):
+                        if board[i,j] == PIECE:
+                            heights.append(self.row - i)
+                            break
+                aggregate_height = sum(heights)
+                bumpiness = 0
+                holes = 0
+                for j in range(self.col):
+                    piece_found = False
+                    if j != self.col-2:
+                        bumpiness += abs(heights[j]-heights[j+1])
+                    for i in range(self.row):
+                        if board[i,j] == PIECE:
+                            piece_found = True
+                        elif board[i,j] == EMPTY and piece_found:
+                            holes += 1
+                return aggregate_height * -0.51 + holes * -0.35 + bumpiness * -0.18
+
+        """
 
     def board_to_channels(self, board):
         obs = np.zeros((4,self.row,self.col))

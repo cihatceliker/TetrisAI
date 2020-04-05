@@ -12,24 +12,16 @@ print_interval = 10
 save_interval = 200
 
 env = Environment()
-agent = Agent(num_actions) if len(sys.argv) == 1 else agent.load(sys.argv[1])    
+agent = Agent(num_actions) if len(sys.argv) == 1 else load_agent(sys.argv[1])  
 
-#agent.optimizer = torch.optim.Adam(agent.local_Q.parameters(), 5e-4)
-#print(agent.optimizer)
-def count(val):
-    cnt = 0
-    for memo in agent.replay_memory.memory:
-        if memo[3] > val:
-            cnt += 1
-    print(cnt)
-
+agent.optimizer = torch.optim.Adam(agent.local_Q.parameters(), 4e-4)
+print(agent.optimizer)
 
 for episode in range(agent.start, num_iter):
     done = False
     score = 0
     ep_duration = 0
     state, next_piece = env.reset()
-
     while not done:
         action = agent.select_action(state, next_piece)
         next_state, reward, done, next_next_piece = env.step(action)
@@ -38,14 +30,14 @@ for episode in range(agent.start, num_iter):
         next_piece = next_next_piece
         score += reward
         ep_duration += 1
-
+    
     agent.learn()
 
     agent.episodes.append(episode)
     agent.scores.append(score)
     agent.durations.append(ep_duration)
     agent.start = episode
-
+    
     if episode % print_interval == 0:
         avg_score = np.mean(agent.scores[max(0, episode-print_interval):(episode+1)])
         avg_duration = np.mean(agent.durations[max(0, episode-print_interval):(episode+1)])
