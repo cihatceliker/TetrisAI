@@ -134,13 +134,13 @@ class ReplayMemory:
         if len(self.memory) < self.capacity:
             self.memory.append(None)
         else:
+            """
             reward = self.memory[int(self.position)][2]
             rnd = np.random.random()
-            if (reward > 0 and rnd < 0.96) or (reward < 0 and rnd < 0.7):
+            if (reward > 2 and rnd < 0.98) or (reward != 0 and rnd < 0.8):
                 self.position = (self.position + 1) % self.capacity
                 self.push(args)
                 return
-            """
             """
         self.memory[int(self.position)] = args
         self.position = (self.position + 1) % self.capacity
