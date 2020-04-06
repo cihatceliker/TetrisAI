@@ -7,6 +7,8 @@ from environment import Environment, ALL_SHAPES
 from tkinter import Frame, Canvas, Tk
 from agent import Agent, load_agent
 import sys
+from pyscreenshot import grab
+import pyautogui
 
 COLORS = {
     0: "#fff",    # BACKGROUND
@@ -20,13 +22,19 @@ class GameGrid():
     def __init__(self, speed=0.02, size=720):
         self.draw_next_offset = size/4
         width = size / 2
-        height = size + self.draw_next_offset
+        height = size# + self.draw_next_offset
         self.root = Tk()
         self.root.configure(background=COLORS[0])
         self.game = Canvas(self.root, width=width, height=height, bg=COLORS[0])
         self.game.pack()
         self.env = Environment()
         self.env.reset()
+        self.history = pickle.load(open(sys.argv[1], "rb"))
+        self.processed = []
+        """
+        for state in self.history:
+            self.processed.append(self.process_channels(state))
+        """
         self.agent = Agent(6) if len(sys.argv) == 1 else load_agent(sys.argv[1])
         cnt = 0
         rewards = []
@@ -36,7 +44,8 @@ class GameGrid():
         idx = np.argmax(rewards)
         print(self.agent.replay_memory.memory[idx][0][2])
         print(self.agent.replay_memory.memory[idx][4][2])
-        print(max(self.agent.durations))
+        print("duration",max(self.agent.durations))
+        print("score",max(self.agent.scores))
         print(min(rewards))
         print(max(rewards))
         self.speed = speed
@@ -88,8 +97,7 @@ class GameGrid():
             state, next_piece = self.env.reset()
             while not done:
                 action = self.agent.select_action(state, next_piece)
-                if action == 5: print("5")
-                state, reward, done, next_piece = self.env.step(action)
+                state, reward, done, next_piece, _ = self.env.step(action)
                 self.board = self.process_channels(state)
                 self.update()
                 time.sleep(self.speed)
@@ -118,6 +126,7 @@ class GameGrid():
         y = 359
         img = grab(bbox=(x,y,x+357,y+718))
         img.save("ss"+str(self.image_counter)+".png")
+        #pyautogui.screenshot().save("ss"+str(self.image_counter)+".png")
         self.image_counter += 1
 
     def update(self):
@@ -127,12 +136,13 @@ class GameGrid():
                 curr = int(self.board[i, j])
                 color = COLORS[curr]
                 self.game.itemconfig(rect, fill=color)
+        """
         rel_x, rel_y = 2, 4
         next_piece = ALL_SHAPES[0][self.env.next_piece]
         coords = []
         for i, j in next_piece:
             coords.append((i+rel_x, j+rel_y))
-
+        
         for i in range(len(self.next_piece_rectangles)):
             for j in range(len(self.next_piece_rectangles[0])):
                 rect = self.next_piece_rectangles[i][j]
@@ -142,6 +152,7 @@ class GameGrid():
                     color = "#e5deff"
                 self.game.itemconfig(rect, fill=color)
             #self.take_screenshot()
+        """
 
 
     def key_down(self, event):
@@ -150,15 +161,19 @@ class GameGrid():
         if event.keycode in self.commands:
             self.action = self.commands[event.keycode]
             self.pause = False
+
             #action = self.commands[event.keycode]
             #self.env.actions[action][0](self.env.actions[action][1])
         #self.update()
 
     def watch_history(self):
-        while not self.quit:
-            self.board = self.process_channels(self.play_it[4:])
+        for state in self.processed:
+            self.board = state
             self.update()
-            time.sleep(1)
+            self.take_screenshot()
+
+            #time.sleep(0.05)
+
 
     def init(self):
         def draw(x1, y1, sz, color, func):
@@ -172,7 +187,7 @@ class GameGrid():
                             self.rectangle_size, color, self.game.create_rectangle)
                 row.append(rect)
             self.game_area.append(row)
-
+        """
         self.next_piece_rectangles = []
         rect_size = self.draw_next_offset // 4
         for i in range(8):
@@ -183,6 +198,7 @@ class GameGrid():
                             rect_size, color, self.game.create_rectangle)
                 row.append(rect)
             self.next_piece_rectangles.append(row)
+        """
 
 
 if __name__ == "__main__":

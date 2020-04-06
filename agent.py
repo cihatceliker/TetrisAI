@@ -49,7 +49,7 @@ class CNN(nn.Module):
 
 class Agent():
     
-    def __init__(self, num_actions, eps_start=1.0, eps_end=0.03, eps_decay=0.996,
+    def __init__(self, num_actions, eps_start=1.0, eps_end=0, eps_decay=0.996,
                             gamma=0.992, memory_capacity=20000, batch_size=128, alpha=10e-4, tau=1e-3):
         self.local_Q = Network(num_actions).to(device)
         self.target_Q = Network(num_actions).to(device)
@@ -136,7 +136,7 @@ class ReplayMemory:
         else:
             reward = self.memory[int(self.position)][2]
             rnd = np.random.random()
-            if (reward > 2 and rnd < 0.98) or (reward != 0 and rnd < 0.9):
+            if (reward != 0 and rnd < 0.8): # (reward > 2 and rnd < 0.98) or 
                 self.position = (self.position + 1) % self.capacity
                 self.push(args)
                 return

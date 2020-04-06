@@ -80,6 +80,7 @@ class Environment:
         return self.process_state(), self.encode_next_piece()
 
     def step(self, action):
+        self.tetrises = []
         self.reward = 0
         self.actions[action][0](self.actions[action][1])
 
@@ -100,7 +101,7 @@ class Environment:
         else:
             self.reward = self.reward**0.5
 
-        return self.process_state(), self.reward, self.done, self.encode_next_piece()
+        return self.process_state(), self.reward, self.done, self.encode_next_piece(), self.tetrises
 
     def process_state(self):
         #return self.board_to_channels(self.board.copy())
@@ -118,7 +119,9 @@ class Environment:
         complete_lines = len(idxs)
         for idx in reversed(idxs):
             self.board[1:idx+1,:] = self.board[0:idx,:]
-        if complete_lines > 0: print("tetris", complete_lines)
+        if complete_lines > 0:
+            #print("tetris", complete_lines)
+            self.tetrises.append(complete_lines)
         
         return complete_lines
 
@@ -144,7 +147,7 @@ class Environment:
                     piece_found = True
                 if piece_found and board[i,j] == EMPTY:
                     holes += 1
-        return aggregate_height * -0.51 + holes * -0.35 + bumpiness * -0.18
+        return aggregate_height * -0.51 + bumpiness * -0.18 + holes * -0.8#-0.35
 
     def board_to_channels(self, board):
         obs = np.zeros((4,self.row,self.col))
