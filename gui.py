@@ -17,7 +17,7 @@ COLORS = {
 
 class GameGrid():
 
-    def __init__(self, speed=0.01, size=720):
+    def __init__(self, speed=0.02, size=720):
         self.draw_next_offset = size/4
         width = size / 2
         height = size + self.draw_next_offset
@@ -27,7 +27,7 @@ class GameGrid():
         self.game.pack()
         self.env = Environment()
         self.env.reset()
-        self.agent = load_agent(sys.argv[1])
+        self.agent = Agent(6) if len(sys.argv) == 1 else load_agent(sys.argv[1])
         cnt = 0
         rewards = []
         for m in self.agent.replay_memory.memory:
@@ -88,8 +88,9 @@ class GameGrid():
             state, next_piece = self.env.reset()
             while not done:
                 action = self.agent.select_action(state, next_piece)
+                if action == 5: print("5")
                 state, reward, done, next_piece = self.env.step(action)
-                self.board = self.process_channels(state[:3])
+                self.board = self.process_channels(state)
                 self.update()
                 time.sleep(self.speed)
 
@@ -141,6 +142,7 @@ class GameGrid():
                     color = "#e5deff"
                 self.game.itemconfig(rect, fill=color)
             #self.take_screenshot()
+
 
     def key_down(self, event):
         if event.keycode == 24: # q

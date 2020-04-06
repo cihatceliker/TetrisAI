@@ -9,7 +9,7 @@ PIECE = 1.0
 
 #CLEAR_REWARD = lambda x: x * 4
 DEATH_REWARD = -8
-DROP_CLEAR = lambda x: x * 1.2
+DROP_CLEAR = lambda x: x * 3
 
 # ARS rotation
 SHAPES = {
@@ -85,9 +85,9 @@ class Environment:
 
         score = 0
         if not self._move((1,0)):
-            self.reward += self.check_complete_lines() * 0.76
+            score += self.check_complete_lines() * 0.76
             self.add_new_piece()
-
+            
             score += self.check_rows(self.board.copy())
             self.reward += score - self.previous_score
             self.previous_score = score
@@ -144,7 +144,6 @@ class Environment:
                     piece_found = True
                 if piece_found and board[i,j] == EMPTY:
                     holes += 1
-
         return aggregate_height * -0.51 + holes * -0.35 + bumpiness * -0.18
 
     def board_to_channels(self, board):

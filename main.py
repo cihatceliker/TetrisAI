@@ -14,7 +14,7 @@ save_interval = 200
 env = Environment()
 agent = Agent(num_actions) if len(sys.argv) == 1 else load_agent(sys.argv[1])  
 
-agent.optimizer = torch.optim.Adam(agent.local_Q.parameters(), 1e-4)
+agent.optimizer = torch.optim.Adam(agent.local_Q.parameters(), 5e-4)
 print(agent.optimizer)
 
 for episode in range(agent.start, num_iter):
