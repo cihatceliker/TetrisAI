@@ -32,7 +32,7 @@ class CNN(nn.Module):
         in_channels = 8
         self.convR = nn.Conv2d(in_channels, 8, (20,1))
         self.convC = nn.Conv2d(in_channels, 8, (1,10))
-        self.conv1 = nn.Conv2d(in_channels, 16, 5, padding=2),
+        self.conv1 = nn.Conv2d(in_channels, 16, 5, padding=2)
         self.block1 = nn.Sequential(
             nn.Conv2d(16, 24, 3, padding=1),
             nn.MaxPool2d(2),
@@ -102,7 +102,7 @@ class Agent():
             evaluated = reward_batch + self.gamma * evaluated * done_batch
 
         self.optimizer.zero_grad()
-        loss = self.loss(prediction, evaluated).to(device).backward()
+        self.loss(prediction, evaluated).to(device).backward()
         self.optimizer.step()
 
         for target_param, local_param in zip(self.target_Q.parameters(), self.local_Q.parameters()):
@@ -133,13 +133,6 @@ class ReplayMemory:
     def push(self, args):
         if len(self.memory) < self.capacity:
             self.memory.append(None)
-        else:
-            reward = self.memory[int(self.position)][2]
-            rnd = np.random.random()
-            if (reward != 0 and rnd < 0.8): # (reward > 2 and rnd < 0.98) or 
-                self.position = (self.position + 1) % self.capacity
-                self.push(args)
-                return
         self.memory[int(self.position)] = args
         self.position = (self.position + 1) % self.capacity
 

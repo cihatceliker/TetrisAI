@@ -101,10 +101,9 @@ class Environment:
         else:
             self.reward = self.reward**0.5
 
-        return self.process_state(), self.reward, self.done, self.encode_next_piece(), self.tetrises
+        return self.process_state(), self.reward, self.done, self.encode_next_piece()
 
     def process_state(self):
-        #return self.board_to_channels(self.board.copy())
         output = np.zeros((8, self.row, self.col))
         output[:4] = self.board_to_channels(self.board.copy())
         output[4:] = self.previous
@@ -120,9 +119,8 @@ class Environment:
         for idx in reversed(idxs):
             self.board[1:idx+1,:] = self.board[0:idx,:]
         if complete_lines > 0:
-            #print("tetris", complete_lines)
             self.tetrises.append(complete_lines)
-        
+
         return complete_lines
 
     def check_rows(self, board):

@@ -1,7 +1,7 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 .vscode/
-*.tt
+*0.tt
 *.mm
 *.tmp
 *.wav
